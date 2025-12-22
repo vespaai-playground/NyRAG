@@ -56,14 +56,10 @@ class Crawly(CrawlSpider):
             self.allowed_domains = allowed_domains
         else:
             if follow_subdomains:
-                self.allowed_domains = [
-                    self._extract_domain(url) for url in self.start_urls
-                ]
+                self.allowed_domains = [self._extract_domain(url) for url in self.start_urls]
             else:
                 # Only allow exact domain matches
-                self.allowed_domains = [
-                    self._extract_exact_domain(url) for url in self.start_urls
-                ]
+                self.allowed_domains = [self._extract_exact_domain(url) for url in self.start_urls]
 
         # Store parameters for rules compilation (BEFORE calling super().__init__)
         self.exclude_urls = exclude_urls if exclude_urls else []
@@ -82,9 +78,7 @@ class Crawly(CrawlSpider):
 
         # Configure robots.txt settings
         if not respect_robots_txt:
-            self.custom_settings.update(
-                {"ROBOTSTXT_OBEY": False, "COOKIES_ENABLED": False}
-            )
+            self.custom_settings.update({"ROBOTSTXT_OBEY": False, "COOKIES_ENABLED": False})
 
         # Configure crawl speed settings
         if aggressive_crawl:
@@ -119,9 +113,7 @@ class Crawly(CrawlSpider):
 
         # Create URL patterns for strict mode
         if self.strict_mode:
-            self.start_url_patterns = [
-                self._get_start_url_pattern(url) for url in self.start_urls
-            ]
+            self.start_url_patterns = [self._get_start_url_pattern(url) for url in self.start_urls]
             allow_patterns = self.start_url_patterns
         else:
             allow_patterns = []
@@ -315,9 +307,7 @@ def crawl_web(
         strict_mode=strict_mode,  # Pass strict_mode parameter
         user_agent_type=user_agent_type,
         custom_user_agent=custom_user_agent,
-        processed_urls=(
-            processed_urls if resume else set()
-        ),  # Pass processed URLs if resuming
+        processed_urls=(processed_urls if resume else set()),  # Pass processed URLs if resuming
         feeder_callback=feeder_callback,  # Pass feeder callback
     )
     process.start()

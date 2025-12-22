@@ -1,8 +1,8 @@
 import inspect
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from pathlib import Path
 
 DEFAULT_LOCAL_PORT = 8080
 DEFAULT_CLOUD_PORT = 443
@@ -35,9 +35,7 @@ def resolve_vespa_cloud_mtls_paths(project_folder: str) -> Tuple[Path, Path]:
     return base_dir / DEFAULT_CLOUD_CERT_NAME, base_dir / DEFAULT_CLOUD_KEY_NAME
 
 
-def get_vespa_tls_config() -> (
-    Tuple[Optional[str], Optional[str], Optional[str], Optional[object]]
-):
+def get_vespa_tls_config() -> Tuple[Optional[str], Optional[str], Optional[str], Optional[object]]:
     """Get Vespa TLS configuration from environment variables.
 
     Returns:

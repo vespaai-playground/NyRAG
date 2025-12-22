@@ -34,17 +34,11 @@ class SearchRequest(BaseModel):
     query: str = Field(..., description="User query string")
     hits: int = Field(10, description="Number of Vespa hits to return")
     k: int = Field(3, description="Top-k chunks to keep per hit")
-    ranking: Optional[str] = Field(
-        None, description="Ranking profile to use (defaults to schema default)"
-    )
-    summary: Optional[str] = Field(
-        None, description="Document summary to request (defaults to top_k_chunks)"
-    )
+    ranking: Optional[str] = Field(None, description="Ranking profile to use (defaults to schema default)")
+    summary: Optional[str] = Field(None, description="Document summary to request (defaults to top_k_chunks)")
 
 
-def _resolve_mtls_paths(
-    vespa_url: str, project_folder: Optional[str]
-) -> Tuple[Optional[str], Optional[str]]:
+def _resolve_mtls_paths(vespa_url: str, project_folder: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
     cert_env = (os.getenv("VESPA_CLIENT_CERT") or "").strip() or None
     key_env = (os.getenv("VESPA_CLIENT_KEY") or "").strip() or None
 
@@ -53,9 +47,7 @@ def _resolve_mtls_paths(
 
     if cert_env or key_env:
         if not (cert_env and key_env):
-            raise RuntimeError(
-                "Vespa Cloud requires both VESPA_CLIENT_CERT and VESPA_CLIENT_KEY."
-            )
+            raise RuntimeError("Vespa Cloud requires both VESPA_CLIENT_CERT and VESPA_CLIENT_KEY.")
         return cert_env, key_env
 
     if not project_folder:
@@ -87,9 +79,7 @@ def _load_settings() -> Dict[str, Any]:
         return {
             "app_package_name": cfg.get_app_package_name(),
             "schema_name": cfg.get_schema_name(),
-            "embedding_model": rag_params.get(
-                "embedding_model", DEFAULT_EMBEDDING_MODEL
-            ),
+            "embedding_model": rag_params.get("embedding_model", DEFAULT_EMBEDDING_MODEL),
             "vespa_url": vespa_url,
             "vespa_port": vespa_port,
         }
@@ -109,9 +99,7 @@ app = FastAPI(title="nyrag API", version="0.1.0")
 model = SentenceTransformer(settings["embedding_model"])
 
 # Get mTLS credentials (with Vespa Cloud fallback)
-_cert, _key = _resolve_mtls_paths(
-    settings["vespa_url"], settings.get("app_package_name")
-)
+_cert, _key = _resolve_mtls_paths(settings["vespa_url"], settings.get("app_package_name"))
 _, _, _ca, _verify = get_vespa_tls_config()
 
 vespa_app = make_vespa_client(
@@ -172,10 +160,7 @@ async def stats() -> Dict[str, Any]:
 
     try:
         # Requires schema field `chunk_count` (added in this repo); if absent, this will likely return null.
-        yql = (
-            "select * from sources * where true | "
-            "all(group(1) each(output(count(), sum(chunk_count))))"
-        )
+        yql = "select * from sources * where true | " "all(group(1) each(output(count(), sum(chunk_count))))"
         res = vespa_app.query(
             body={"yql": yql, "hits": 0},
             schema=settings["schema_name"],
@@ -231,9 +216,7 @@ class ChatRequest(BaseModel):
         ge=0,
         description="Number of alternate search queries to generate with the LLM",
     )
-    model: Optional[str] = Field(
-        None, description="OpenRouter model id (optional, uses env default if set)"
-    )
+    model: Optional[str] = Field(None, description="OpenRouter model id (optional, uses env default if set)")
 
 
 def _fetch_chunks(query: str, hits: int, k: int) -> List[Dict[str, Any]]:
@@ -267,10 +250,7 @@ def _fetch_chunks(query: str, hits: int, k: int) -> List[Dict[str, Any]]:
         except (TypeError, ValueError):
             hit_score = 0.0
         summary_features = (
-            hit.get("summaryfeatures")
-            or hit.get("summaryFeatures")
-            or fields.get("summaryfeatures")
-            or {}
+            hit.get("summaryfeatures") or hit.get("summaryFeatures") or fields.get("summaryfeatures") or {}
         )
         chunk_score_raw = summary_features.get("best_chunk_score", hit_score)
         logger.info(f"  best_chunk_score={chunk_score_raw}")
@@ -309,9 +289,7 @@ def _get_openrouter_client() -> AsyncOpenAI:
     title = os.getenv("OPENROUTER_TITLE")
     if title:
         default_headers["X-Title"] = title
-    return AsyncOpenAI(
-        base_url=base_url, api_key=api_key, default_headers=default_headers or None
-    )
+    return AsyncOpenAI(base_url=base_url, api_key=api_key, default_headers=default_headers or None)
 
 
 def _extract_message_text(content: Any) -> str:
@@ -351,9 +329,7 @@ async def _generate_search_queries_stream(
         return
 
     grounding_chunks = (await _fetch_chunks_async(user_message, hits=hits, k=k))[:5]
-    grounding_text = "\n".join(
-        f"- [{c.get('loc','')}] {c.get('chunk','')}" for c in grounding_chunks
-    )
+    grounding_text = "\n".join(f"- [{c.get('loc','')}] {c.get('chunk','')}" for c in grounding_chunks)
 
     system_prompt = (
         "You generate concise, to-the-point search queries that help retrieve"
@@ -473,21 +449,15 @@ async def _prepare_queries_stream(
     yield "result", deduped
 
 
-async def _prepare_queries(
-    user_message: str, model_id: str, query_k: int, hits: int, k: int
-) -> List[str]:
+async def _prepare_queries(user_message: str, model_id: str, query_k: int, hits: int, k: int) -> List[str]:
     queries = []
-    async for event_type, payload in _prepare_queries_stream(
-        user_message, model_id, query_k, hits, k
-    ):
+    async for event_type, payload in _prepare_queries_stream(user_message, model_id, query_k, hits, k):
         if event_type == "result":
             queries = payload
     return queries
 
 
-async def _fuse_chunks(
-    queries: List[str], hits: int, k: int
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+async def _fuse_chunks(queries: List[str], hits: int, k: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Search Vespa for each query and return fused, deduped chunks."""
     all_chunks: List[Dict[str, Any]] = []
     logger.info(f"Fetching chunks for {len(queries)} queries")
@@ -545,18 +515,14 @@ async def _fuse_chunks(
     return queries, fused
 
 
-async def _call_openrouter(
-    context: List[Dict[str, str]], user_message: str, model_id: str
-) -> str:
+async def _call_openrouter(context: List[Dict[str, str]], user_message: str, model_id: str) -> str:
     system_prompt = (
         "You are a helpful assistant. "
         "Answer user's question using only the provided context. "
         "Provide elaborate and informative answers where possible. "
         "If the context is insufficient, say you don't know."
     )
-    context_text = "\n\n".join(
-        [f"[{c.get('loc','')}] {c.get('chunk','')}" for c in context]
-    )
+    context_text = "\n\n".join([f"[{c.get('loc','')}] {c.get('chunk','')}" for c in context])
     messages = [
         {"role": "system", "content": system_prompt},
         {
@@ -588,9 +554,7 @@ async def _openrouter_stream(
         "You are a helpful assistant. Answer using only the provided context. "
         "If the context is insufficient, say you don't know."
     )
-    context_text = "\n\n".join(
-        [f"[{c.get('loc','')}] {c.get('chunk','')}" for c in context]
-    )
+    context_text = "\n\n".join([f"[{c.get('loc','')}] {c.get('chunk','')}" for c in context])
 
     messages = [{"role": "system", "content": system_prompt}]
 
@@ -633,9 +597,7 @@ async def _openrouter_stream(
 async def chat(req: ChatRequest) -> Dict[str, Any]:
     model_id = req.model or os.getenv("OPENROUTER_MODEL")
     queries, chunks = await _fuse_chunks(
-        await _prepare_queries(
-            req.message, model_id, req.query_k, hits=req.hits, k=req.k
-        ),
+        await _prepare_queries(req.message, model_id, req.query_k, hits=req.hits, k=req.k),
         hits=req.hits,
         k=req.k,
     )
@@ -674,9 +636,7 @@ async def chat_stream(req: ChatRequest):
             yield f"data: {json.dumps({'type': 'done', 'payload': 'No relevant context found.'})}\n\n"
             return
         yield f"data: {json.dumps({'type': 'status', 'payload': 'Generating answer...'})}\n\n"
-        async for type_, payload in _openrouter_stream(
-            chunks, req.message, model_id, req.history
-        ):
+        async for type_, payload in _openrouter_stream(chunks, req.message, model_id, req.history):
             yield f"data: {json.dumps({'type': type_, 'payload': payload})}\n\n"
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 

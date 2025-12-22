@@ -42,9 +42,7 @@ def _confirm_cluster_removal(message: str, *, until: date) -> bool:
     - Otherwise, ask the user.
     """
     if _truthy_env(os.getenv("NYRAG_VESPA_ALLOW_CONTENT_CLUSTER_REMOVAL", "")):
-        logger.warning(
-            "NYRAG_VESPA_ALLOW_CONTENT_CLUSTER_REMOVAL=1 set; proceeding with content cluster removal."
-        )
+        logger.warning("NYRAG_VESPA_ALLOW_CONTENT_CLUSTER_REMOVAL=1 set; proceeding with content cluster removal.")
         return True
 
     if not sys.stdin.isatty():
@@ -73,9 +71,7 @@ def _write_validation_overrides(app_dir: Path, *, until: date) -> None:
     )
 
 
-def _deploy_with_pyvespa(
-    deployer: Any, *, application_package: ApplicationPackage, application_root: Path
-) -> Any:
+def _deploy_with_pyvespa(deployer: Any, *, application_package: ApplicationPackage, application_root: Path) -> Any:
     """
     Deploy using pyvespa across minor API differences.
 
@@ -137,9 +133,7 @@ def _set_vespa_endpoint_env_from_app(vespa_app: Any) -> None:
         if isinstance(port, int):
             os.environ["VESPA_PORT"] = str(port)
         else:
-            default_port = (
-                "443" if url.strip().lower().startswith("https://") else "8080"
-            )
+            default_port = "443" if url.strip().lower().startswith("https://") else "8080"
             os.environ.setdefault("VESPA_PORT", default_port)
 
     # Best-effort: carry over mTLS material from pyvespa if present.
@@ -176,8 +170,7 @@ def deploy_app_package(
         mode = "docker" if _truthy_env(local_env) else "cloud"
     else:
         has_cloud_hints = bool(
-            (os.getenv("VESPA_CLOUD_TENANT") or "").strip()
-            or (os.getenv("VESPA_CLOUD_APPLICATION") or "").strip()
+            (os.getenv("VESPA_CLOUD_TENANT") or "").strip() or (os.getenv("VESPA_CLOUD_APPLICATION") or "").strip()
         )
         mode = "cloud" if has_cloud_hints else "docker"
 
@@ -194,9 +187,7 @@ def deploy_app_package(
             if mode == "docker":
                 from vespa.deployment import VespaDocker  # type: ignore
 
-                image = os.getenv(
-                    "NYRAG_VESPA_DOCKER_IMAGE", "vespaengine/vespa:latest"
-                )
+                image = os.getenv("NYRAG_VESPA_DOCKER_IMAGE", "vespaengine/vespa:latest")
                 logger.info(f"Deploying with VespaDocker (image={image})")
 
                 import inspect
@@ -231,21 +222,13 @@ def deploy_app_package(
                 tenant = (os.getenv("VESPA_CLOUD_TENANT") or "").strip()
                 application_env = (os.getenv("VESPA_CLOUD_APPLICATION") or "").strip()
                 application = application_env or app_package.name
-                instance = (
-                    os.getenv("VESPA_CLOUD_INSTANCE") or ""
-                ).strip() or "default"
+                instance = (os.getenv("VESPA_CLOUD_INSTANCE") or "").strip() or "default"
                 if not tenant:
-                    raise RuntimeError(
-                        "Missing Vespa Cloud env var: VESPA_CLOUD_TENANT"
-                    )
+                    raise RuntimeError("Missing Vespa Cloud env var: VESPA_CLOUD_TENANT")
 
                 if not application_env:
-                    logger.info(
-                        f"VESPA_CLOUD_APPLICATION not set; using generated app name '{application}'"
-                    )
-                logger.info(
-                    f"Deploying to Vespa Cloud: {tenant}/{application}/{instance}"
-                )
+                    logger.info(f"VESPA_CLOUD_APPLICATION not set; using generated app name '{application}'")
+                logger.info(f"Deploying to Vespa Cloud: {tenant}/{application}/{instance}")
 
                 import inspect
 
@@ -265,9 +248,7 @@ def deploy_app_package(
                 if "application_root" in init_sig.parameters:
                     init_kwargs["application_root"] = str(effective_app_dir)
 
-                api_key_path = (
-                    os.getenv("VESPA_CLOUD_API_KEY_PATH") or ""
-                ).strip() or None
+                api_key_path = (os.getenv("VESPA_CLOUD_API_KEY_PATH") or "").strip() or None
                 api_key = (os.getenv("VESPA_CLOUD_API_KEY") or "").strip() or None
                 if api_key_path and "api_key_path" in init_sig.parameters:
                     init_kwargs["api_key_path"] = api_key_path

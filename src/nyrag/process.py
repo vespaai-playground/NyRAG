@@ -37,9 +37,7 @@ def load_processed_locations(jsonl_file: Path) -> set:
                     data = json.loads(line)
                     if "loc" in data:
                         processed.add(data["loc"])
-        logger.info(
-            f"Loaded {len(processed)} already processed items from {jsonl_file}"
-        )
+        logger.info(f"Loaded {len(processed)} already processed items from {jsonl_file}")
     except Exception as e:
         logger.warning(f"Failed to load processed items from {jsonl_file}: {e}")
 
@@ -136,9 +134,7 @@ def _create_schema(config: Config):
     logger.info(f"App package name: {app_package_name}")
     logger.info(f"Schema parameters: {schema_params}")
 
-    vespa_schema = VespaSchema(
-        schema_name=schema_name, app_package_name=app_package_name, **schema_params
-    )
+    vespa_schema = VespaSchema(schema_name=schema_name, app_package_name=app_package_name, **schema_params)
 
     app_package = vespa_schema.get_package()
     app_package.to_files(str(app_path))
@@ -197,9 +193,7 @@ def _process_web(config: Config, output_dir: Path, resume: bool = False):
     logger.info("Initializing Vespa feeder...")
     vespa_url = (os.getenv("VESPA_URL") or "").strip() or "http://localhost"
     vespa_port = resolve_vespa_port(vespa_url)
-    feeder = VespaFeeder(
-        config=config, redeploy=False, vespa_url=vespa_url, vespa_port=vespa_port
-    )
+    feeder = VespaFeeder(config=config, redeploy=False, vespa_url=vespa_url, vespa_port=vespa_port)
     feeder_callback = feeder.feed
 
     try:
@@ -263,9 +257,7 @@ def _process_documents(config: Config, output_dir: Path, resume: bool = False):
     if exclude_patterns:
         original_count = len(documents)
         documents = _apply_exclusions(documents, exclude_patterns)
-        logger.info(
-            f"Excluded {original_count - len(documents)} files based on patterns"
-        )
+        logger.info(f"Excluded {original_count - len(documents)} files based on patterns")
 
     # Apply file extension filter
     if doc_params.file_extensions:
@@ -274,23 +266,16 @@ def _process_documents(config: Config, output_dir: Path, resume: bool = False):
             d
             for d in documents
             if d.suffix.lower()
-            in [
-                ext.lower() if ext.startswith(".") else f".{ext.lower()}"
-                for ext in doc_params.file_extensions
-            ]
+            in [ext.lower() if ext.startswith(".") else f".{ext.lower()}" for ext in doc_params.file_extensions]
         ]
-        logger.info(
-            f"Filtered to {len(documents)} files by extension (excluded {original_count - len(documents)})"
-        )
+        logger.info(f"Filtered to {len(documents)} files by extension (excluded {original_count - len(documents)})")
 
     # Apply file size filter
     if doc_params.max_file_size_mb:
         original_count = len(documents)
         max_bytes = doc_params.max_file_size_mb * 1024 * 1024
         documents = [d for d in documents if d.stat().st_size <= max_bytes]
-        logger.info(
-            f"Filtered to {len(documents)} files by size (excluded {original_count - len(documents)})"
-        )
+        logger.info(f"Filtered to {len(documents)} files by size (excluded {original_count - len(documents)})")
 
     if not documents:
         logger.error("No documents found to process")
@@ -324,9 +309,7 @@ def _process_documents(config: Config, output_dir: Path, resume: bool = False):
     logger.info("Initializing Vespa feeder...")
     vespa_url = (os.getenv("VESPA_URL") or "").strip() or "http://localhost"
     vespa_port = resolve_vespa_port(vespa_url)
-    feeder = VespaFeeder(
-        config=config, redeploy=False, vespa_url=vespa_url, vespa_port=vespa_port
-    )
+    feeder = VespaFeeder(config=config, redeploy=False, vespa_url=vespa_url, vespa_port=vespa_port)
 
     md = MarkItDown()
     success_count = 0
@@ -343,9 +326,7 @@ def _process_documents(config: Config, output_dir: Path, resume: bool = False):
                 # Check if it's an encoding error, either directly or wrapped
                 if isinstance(e, UnicodeDecodeError) or "UnicodeDecodeError" in str(e):
                     # If we get a UnicodeDecodeError, retry with explicit UTF-8 encoding hint
-                    logger.warning(
-                        f"Encoding error for {doc_file.name}, retrying with UTF-8 encoding"
-                    )
+                    logger.warning(f"Encoding error for {doc_file.name}, retrying with UTF-8 encoding")
                     stream_info = StreamInfo(charset="utf-8")
                     result = md.convert(str(doc_file), stream_info=stream_info)
                 else:
@@ -377,9 +358,7 @@ def _process_documents(config: Config, output_dir: Path, resume: bool = False):
             logger.error(f"Failed to process {doc_file}: {str(e)}")
             error_count += 1
 
-    logger.success(
-        f"Document processing completed: {success_count} successful, {error_count} failed"
-    )
+    logger.success(f"Document processing completed: {success_count} successful, {error_count} failed")
 
 
 def _collect_documents(directory: Path, doc_params) -> List[Path]:

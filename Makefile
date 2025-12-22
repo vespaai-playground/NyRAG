@@ -18,4 +18,4 @@ pip:
 	rm -rf dist/
 	make style && make quality
 	python -m build
-	twine upload dist/* --verbose --repository nyrag
+	twine upload dist/* --verbose

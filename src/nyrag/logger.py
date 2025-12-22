@@ -74,9 +74,7 @@ class NyragLogger:
     def warning(self, message: str, **kwargs):
         """Log warning message."""
         safe = rich_escape(str(message))
-        self.logger.warning(
-            f"[warning]{safe}[/warning]", extra={"markup": True}, **kwargs
-        )
+        self.logger.warning(f"[warning]{safe}[/warning]", extra={"markup": True}, **kwargs)
 
     def error(self, message: str, **kwargs):
         """Log error message."""
@@ -86,23 +84,17 @@ class NyragLogger:
     def critical(self, message: str, **kwargs):
         """Log critical message."""
         safe = rich_escape(str(message))
-        self.logger.critical(
-            f"[critical]{safe}[/critical]", extra={"markup": True}, **kwargs
-        )
+        self.logger.critical(f"[critical]{safe}[/critical]", extra={"markup": True}, **kwargs)
 
     def success(self, message: str, **kwargs):
         """Log success message."""
         safe = rich_escape(str(message))
-        self.logger.info(
-            f"[success]✓ {safe}[/success]", extra={"markup": True}, **kwargs
-        )
+        self.logger.info(f"[success]✓ {safe}[/success]", extra={"markup": True}, **kwargs)
 
     def exception(self, message: str, **kwargs):
         """Log exception with traceback."""
         safe = rich_escape(str(message))
-        self.logger.exception(
-            f"[error]{safe}[/error]", extra={"markup": True}, **kwargs
-        )
+        self.logger.exception(f"[error]{safe}[/error]", extra={"markup": True}, **kwargs)
 
 
 # Global logger instance
