@@ -54,6 +54,9 @@ nyrag = "nyrag.cli:main"
 Homepage = "https://github.com/abhishekkrthakur/nyrag"
 Issues = "https://github.com/abhishekkrthakur/nyrag/issues"
 
+[tool.setuptools.package-data]
+nyrag = ["static/*", "templates/*"]
+
 [tool.isort]
 ensure_newline_before_comments = true
 force_grid_wrap = 0
