@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nyrag"
-version = "0.0.6"
+version = "0.0.7"
 description = "nyrag"
 readme = "README.md"
 requires-python = "==3.10"
