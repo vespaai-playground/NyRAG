@@ -1,6 +1,6 @@
 # NyRAG
 
-A simple tool for building RAG applications by crawling websites or processing documents, then deploying to Vespa for hybrid search with an integrated chat UI.
+NyRAG (pronounced as knee-RAG) is a simple tool for building RAG applications by crawling websites or processing documents, then deploying to Vespa for hybrid search with an integrated chat UI.
 
 ![NyRAG Chat UI](assets/ui.png)
 
