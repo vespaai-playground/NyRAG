@@ -26,3 +26,27 @@ rag_params:
   chunk_overlap: 50
   distance_metric: angular        # Distance metric: angular, euclidean, etc. (default: angular)
   max_tokens: 8192
+  
+  # Optional: LLM configuration (works with any OpenAI-compatible API)
+  # If not set, will use environment variables (LLM_BASE_URL, LLM_MODEL, LLM_API_KEY)
+  # or fall back to OpenRouter (OPENROUTER_API_KEY, OPENROUTER_MODEL)
+  
+  # For OpenRouter (default):
+  # llm_base_url: https://openrouter.ai/api/v1
+  # llm_model: anthropic/claude-3.5-sonnet
+  # llm_api_key: your-openrouter-key
+  
+  # For Ollama (local):
+  # llm_base_url: http://localhost:11434/v1
+  # llm_model: llama3.2
+  # llm_api_key: dummy  # Any value works for local models
+  
+  # For LM Studio (local):
+  llm_base_url: http://localhost:1234/v1
+  llm_model: openai/gpt-oss-20b
+  llm_api_key: dummy
+  
+  # For vLLM (local or remote):
+  # llm_base_url: http://localhost:8000/v1
+  # llm_model: meta-llama/Llama-3.2-3B-Instruct
+  # llm_api_key: dummy

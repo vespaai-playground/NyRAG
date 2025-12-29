@@ -12,9 +12,20 @@ When a user asks a question, NyRAG performs a multi-stage retrieval process:
 2. **Embedding Generation**: Each query is converted to embeddings using the configured SentenceTransformer model
 3. **Vespa Search**: Queries are executed against Vespa using nearestNeighbor search with the `best_chunk_score` ranking profile to find the most relevant document chunks
 4. **Chunk Fusion**: Results from all queries are aggregated, deduplicated, and ranked by score to select the top-k most relevant chunks
-5. **Answer Generation**: The retrieved context is sent to an LLM (via OpenRouter) which generates a grounded answer based only on the provided chunks
+5. **Answer Generation**: The retrieved context is sent to an LLM which generates a grounded answer based only on the provided chunks
 
 This multi-query RAG approach with chunk-level retrieval ensures answers are comprehensive and grounded in your actual content, whether from crawled websites or processed documents.
+
+### LLM Support
+
+NyRAG works with **any OpenAI-compatible API**, including:
+- **OpenRouter** (100+ models from various providers)
+- **Ollama** (local models: Llama, Mistral, Qwen, etc.)
+- **LM Studio** (local GUI for running models)
+- **vLLM** (high-performance local or remote inference)
+- **LocalAI** (local OpenAI drop-in replacement)
+- **OpenAI** (GPT-4, GPT-3.5, etc.)
+- Any other service implementing the OpenAI API format
 
 
 ## Installation
@@ -207,6 +218,9 @@ Open http://localhost:8000/chat
 | `chunk_overlap` | int | `50` | Overlap between chunks |
 | `distance_metric` | str | `angular` | Distance metric |
 | `max_tokens` | int | `8192` | Max tokens per document |
+| `llm_base_url` | str | `None` | LLM API base URL (OpenAI-compatible) |
+| `llm_model` | str | `None` | LLM model name |
+| `llm_api_key` | str | `None` | LLM API key |
 
 ---
 
@@ -241,7 +255,92 @@ Open http://localhost:8000/chat
 |----------|-------------|
 | `NYRAG_CONFIG` | Path to config file |
 | `VESPA_URL` | Vespa endpoint URL (optional for local, required for cloud) |
-| `OPENROUTER_API_KEY` | OpenRouter API key for LLM |
-| `OPENROUTER_MODEL` | LLM model (e.g., `openai/gpt-4o`) |
+| `LLM_BASE_URL` | LLM API base URL (OpenAI-compatible API) |
+| `LLM_MODEL` | LLM model name |
+| `LLM_API_KEY` | LLM API key |
+| `OPENROUTER_API_KEY` | OpenRouter API key (alternative to `LLM_API_KEY`) |
+| `OPENROUTER_MODEL` | OpenRouter model (alternative to `LLM_MODEL`) |
+| `OPENROUTER_BASE_URL` | OpenRouter base URL (alternative to `LLM_BASE_URL`) |
+
+---
+
+## Using Local Models
+
+NyRAG supports running LLMs locally using any OpenAI-compatible server. Here are some popular options:
+
+### Ollama (Recommended for Local Use)
+
+1. **Install Ollama**: [https://ollama.ai](https://ollama.ai)
+
+2. **Pull a model**:
+   ```bash
+   ollama pull llama3.2
+   ```
+
+3. **Configure NyRAG** (option 1: environment variables):
+   ```bash
+   export LLM_BASE_URL=http://localhost:11434/v1
+   export LLM_MODEL=llama3.2
+   export LLM_API_KEY=dummy  # Any value works
+   ```
+
+4. **Or configure in YAML**:
+   ```yaml
+   rag_params:
+     llm_base_url: http://localhost:11434/v1
+     llm_model: llama3.2
+     llm_api_key: dummy
+   ```
+
+5. **Start the chat UI**:
+   ```bash
+   nyrag-api
+   ```
+
+### LM Studio
+
+1. **Install LM Studio**: [https://lmstudio.ai](https://lmstudio.ai)
+
+2. **Load a model and start the server** (default port: 1234)
+
+3. **Configure NyRAG**:
+   ```bash
+   export LLM_BASE_URL=http://localhost:1234/v1
+   export LLM_MODEL=local-model  # Model name from LM Studio
+   export LLM_API_KEY=dummy
+   ```
+
+### vLLM
+
+1. **Install and run vLLM**:
+   ```bash
+   pip install vllm
+   python -m vllm.entrypoints.openai.api_server \
+     --model meta-llama/Llama-3.2-3B-Instruct \
+     --port 8000
+   ```
+
+2. **Configure NyRAG**:
+   ```bash
+   export LLM_BASE_URL=http://localhost:8000/v1
+   export LLM_MODEL=meta-llama/Llama-3.2-3B-Instruct
+   export LLM_API_KEY=dummy
+   ```
+
+### OpenRouter (Cloud)
+
+For access to 100+ models without local setup:
+
+```bash
+export LLM_BASE_URL=https://openrouter.ai/api/v1
+export LLM_MODEL=anthropic/claude-3.5-sonnet
+export LLM_API_KEY=your-openrouter-key
+```
+
+Or use the legacy environment variables:
+```bash
+export OPENROUTER_API_KEY=your-key
+export OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+```
 
 ---

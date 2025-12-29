@@ -34,11 +34,17 @@ class SearchRequest(BaseModel):
     query: str = Field(..., description="User query string")
     hits: int = Field(10, description="Number of Vespa hits to return")
     k: int = Field(3, description="Top-k chunks to keep per hit")
-    ranking: Optional[str] = Field(None, description="Ranking profile to use (defaults to schema default)")
-    summary: Optional[str] = Field(None, description="Document summary to request (defaults to top_k_chunks)")
+    ranking: Optional[str] = Field(
+        None, description="Ranking profile to use (defaults to schema default)"
+    )
+    summary: Optional[str] = Field(
+        None, description="Document summary to request (defaults to top_k_chunks)"
+    )
 
 
-def _resolve_mtls_paths(vespa_url: str, project_folder: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+def _resolve_mtls_paths(
+    vespa_url: str, project_folder: Optional[str]
+) -> Tuple[Optional[str], Optional[str]]:
     cert_env = (os.getenv("VESPA_CLIENT_CERT") or "").strip() or None
     key_env = (os.getenv("VESPA_CLIENT_KEY") or "").strip() or None
 
@@ -47,7 +53,9 @@ def _resolve_mtls_paths(vespa_url: str, project_folder: Optional[str]) -> Tuple[
 
     if cert_env or key_env:
         if not (cert_env and key_env):
-            raise RuntimeError("Vespa Cloud requires both VESPA_CLIENT_CERT and VESPA_CLIENT_KEY.")
+            raise RuntimeError(
+                "Vespa Cloud requires both VESPA_CLIENT_CERT and VESPA_CLIENT_KEY."
+            )
         return cert_env, key_env
 
     if not project_folder:
@@ -76,12 +84,18 @@ def _load_settings() -> Dict[str, Any]:
     if config_path and Path(config_path).exists():
         cfg = Config.from_yaml(config_path)
         rag_params = cfg.rag_params or {}
+        llm_config = cfg.get_llm_config()
         return {
             "app_package_name": cfg.get_app_package_name(),
             "schema_name": cfg.get_schema_name(),
-            "embedding_model": rag_params.get("embedding_model", DEFAULT_EMBEDDING_MODEL),
+            "embedding_model": rag_params.get(
+                "embedding_model", DEFAULT_EMBEDDING_MODEL
+            ),
             "vespa_url": vespa_url,
             "vespa_port": vespa_port,
+            "llm_base_url": llm_config.get("llm_base_url"),
+            "llm_model": llm_config.get("llm_model"),
+            "llm_api_key": llm_config.get("llm_api_key"),
         }
 
     return {
@@ -90,6 +104,9 @@ def _load_settings() -> Dict[str, Any]:
         "embedding_model": os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),
         "vespa_url": vespa_url,
         "vespa_port": vespa_port,
+        "llm_base_url": None,
+        "llm_model": None,
+        "llm_api_key": None,
     }
 
 
@@ -99,7 +116,9 @@ app = FastAPI(title="nyrag API", version="0.1.0")
 model = SentenceTransformer(settings["embedding_model"])
 
 # Get mTLS credentials (with Vespa Cloud fallback)
-_cert, _key = _resolve_mtls_paths(settings["vespa_url"], settings.get("app_package_name"))
+_cert, _key = _resolve_mtls_paths(
+    settings["vespa_url"], settings.get("app_package_name")
+)
 _, _, _ca, _verify = get_vespa_tls_config()
 
 vespa_app = make_vespa_client(
@@ -160,7 +179,10 @@ async def stats() -> Dict[str, Any]:
 
     try:
         # Requires schema field `chunk_count` (added in this repo); if absent, this will likely return null.
-        yql = "select * from sources * where true | " "all(group(1) each(output(count(), sum(chunk_count))))"
+        yql = (
+            "select * from sources * where true | "
+            "all(group(1) each(output(count(), sum(chunk_count))))"
+        )
         res = vespa_app.query(
             body={"yql": yql, "hits": 0},
             schema=settings["schema_name"],
@@ -216,7 +238,9 @@ class ChatRequest(BaseModel):
         ge=0,
         description="Number of alternate search queries to generate with the LLM",
     )
-    model: Optional[str] = Field(None, description="OpenRouter model id (optional, uses env default if set)")
+    model: Optional[str] = Field(
+        None, description="OpenRouter model id (optional, uses env default if set)"
+    )
 
 
 def _fetch_chunks(query: str, hits: int, k: int) -> List[Dict[str, Any]]:
@@ -250,7 +274,10 @@ def _fetch_chunks(query: str, hits: int, k: int) -> List[Dict[str, Any]]:
         except (TypeError, ValueError):
             hit_score = 0.0
         summary_features = (
-            hit.get("summaryfeatures") or hit.get("summaryFeatures") or fields.get("summaryfeatures") or {}
+            hit.get("summaryfeatures")
+            or hit.get("summaryFeatures")
+            or fields.get("summaryfeatures")
+            or {}
         )
         chunk_score_raw = summary_features.get("best_chunk_score", hit_score)
         logger.info(f"  best_chunk_score={chunk_score_raw}")
@@ -277,11 +304,30 @@ async def _fetch_chunks_async(query: str, hits: int, k: int) -> List[Dict[str, A
     return await loop.run_in_executor(None, partial(_fetch_chunks, query, hits, k))
 
 
-def _get_openrouter_client() -> AsyncOpenAI:
-    api_key = os.getenv("OPENROUTER_API_KEY")
+def _get_llm_client() -> AsyncOpenAI:
+    """Get LLM client supporting any OpenAI-compatible API (OpenRouter, Ollama, LM Studio, vLLM, etc.)."""
+    # Priority: config file > env vars > defaults (OpenRouter)
+    base_url = (
+        settings.get("llm_base_url")
+        or os.getenv("LLM_BASE_URL")
+        or os.getenv("OPENROUTER_BASE_URL")
+        or "https://openrouter.ai/api/v1"
+    )
+
+    api_key = (
+        settings.get("llm_api_key")
+        or os.getenv("LLM_API_KEY")
+        or os.getenv("OPENROUTER_API_KEY")
+    )
+
     if not api_key:
-        raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY not set")
-    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        raise HTTPException(
+            status_code=500,
+            detail="LLM API key not set. Set LLM_API_KEY or OPENROUTER_API_KEY environment variable, "
+            "or configure llm_api_key in config file. For local models, use any dummy value.",
+        )
+
+    # OpenRouter-specific headers (ignored by other providers)
     default_headers = {}
     referer = os.getenv("OPENROUTER_REFERRER")
     if referer:
@@ -289,7 +335,10 @@ def _get_openrouter_client() -> AsyncOpenAI:
     title = os.getenv("OPENROUTER_TITLE")
     if title:
         default_headers["X-Title"] = title
-    return AsyncOpenAI(base_url=base_url, api_key=api_key, default_headers=default_headers or None)
+
+    return AsyncOpenAI(
+        base_url=base_url, api_key=api_key, default_headers=default_headers or None
+    )
 
 
 def _extract_message_text(content: Any) -> str:
@@ -329,7 +378,9 @@ async def _generate_search_queries_stream(
         return
 
     grounding_chunks = (await _fetch_chunks_async(user_message, hits=hits, k=k))[:5]
-    grounding_text = "\n".join(f"- [{c.get('loc','')}] {c.get('chunk','')}" for c in grounding_chunks)
+    grounding_text = "\n".join(
+        f"- [{c.get('loc','')}] {c.get('chunk','')}" for c in grounding_chunks
+    )
 
     system_prompt = (
         "You generate concise, to-the-point search queries that help retrieve"
@@ -361,17 +412,36 @@ async def _generate_search_queries_stream(
 
     full_content = ""
     try:
-        client = _get_openrouter_client()
-        stream = await client.chat.completions.create(
-            model=model_id,
-            messages=[
+        client = _get_llm_client()
+
+        # Try with response_format and reasoning support (OpenRouter, OpenAI)
+        # Fall back to basic streaming if not supported (local models)
+        request_kwargs = {
+            "model": model_id,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            response_format={"type": "json_object"},
-            stream=True,
-            extra_body={"reasoning": {"enabled": True}},
-        )
+            "stream": True,
+        }
+
+        # Try with structured output first
+        try:
+            request_kwargs["response_format"] = {"type": "json_object"}
+            request_kwargs["extra_body"] = {"reasoning": {"enabled": True}}
+            stream = await client.chat.completions.create(**request_kwargs)
+        except Exception as e:
+            # Fallback: remove unsupported parameters for local models
+            if (
+                "response_format" in str(e)
+                or "extra_body" in str(e)
+                or "reasoning" in str(e)
+            ):
+                request_kwargs.pop("response_format", None)
+                request_kwargs.pop("extra_body", None)
+                stream = await client.chat.completions.create(**request_kwargs)
+            else:
+                raise
 
         async for chunk in stream:
             choice = chunk.choices[0]
@@ -449,15 +519,21 @@ async def _prepare_queries_stream(
     yield "result", deduped
 
 
-async def _prepare_queries(user_message: str, model_id: str, query_k: int, hits: int, k: int) -> List[str]:
+async def _prepare_queries(
+    user_message: str, model_id: str, query_k: int, hits: int, k: int
+) -> List[str]:
     queries = []
-    async for event_type, payload in _prepare_queries_stream(user_message, model_id, query_k, hits, k):
+    async for event_type, payload in _prepare_queries_stream(
+        user_message, model_id, query_k, hits, k
+    ):
         if event_type == "result":
             queries = payload
     return queries
 
 
-async def _fuse_chunks(queries: List[str], hits: int, k: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+async def _fuse_chunks(
+    queries: List[str], hits: int, k: int
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Search Vespa for each query and return fused, deduped chunks."""
     all_chunks: List[Dict[str, Any]] = []
     logger.info(f"Fetching chunks for {len(queries)} queries")
@@ -515,14 +591,18 @@ async def _fuse_chunks(queries: List[str], hits: int, k: int) -> Tuple[List[Dict
     return queries, fused
 
 
-async def _call_openrouter(context: List[Dict[str, str]], user_message: str, model_id: str) -> str:
+async def _call_openrouter(
+    context: List[Dict[str, str]], user_message: str, model_id: str
+) -> str:
     system_prompt = (
         "You are a helpful assistant. "
         "Answer user's question using only the provided context. "
         "Provide elaborate and informative answers where possible. "
         "If the context is insufficient, say you don't know."
     )
-    context_text = "\n\n".join([f"[{c.get('loc','')}] {c.get('chunk','')}" for c in context])
+    context_text = "\n\n".join(
+        [f"[{c.get('loc','')}] {c.get('chunk','')}" for c in context]
+    )
     messages = [
         {"role": "system", "content": system_prompt},
         {
@@ -532,12 +612,24 @@ async def _call_openrouter(context: List[Dict[str, str]], user_message: str, mod
     ]
 
     try:
-        client = _get_openrouter_client()
-        resp = await client.chat.completions.create(
-            model=model_id,
-            messages=messages,
-            extra_body={"reasoning": {"enabled": True}},
-        )
+        client = _get_llm_client()
+
+        # Try with reasoning support, fall back without it
+        try:
+            resp = await client.chat.completions.create(
+                model=model_id,
+                messages=messages,
+                extra_body={"reasoning": {"enabled": True}},
+            )
+        except Exception as e:
+            # Fallback: remove unsupported parameters for local models
+            if "extra_body" in str(e) or "reasoning" in str(e):
+                resp = await client.chat.completions.create(
+                    model=model_id,
+                    messages=messages,
+                )
+            else:
+                raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -554,7 +646,9 @@ async def _openrouter_stream(
         "You are a helpful assistant. Answer using only the provided context. "
         "If the context is insufficient, say you don't know."
     )
-    context_text = "\n\n".join([f"[{c.get('loc','')}] {c.get('chunk','')}" for c in context])
+    context_text = "\n\n".join(
+        [f"[{c.get('loc','')}] {c.get('chunk','')}" for c in context]
+    )
 
     messages = [{"role": "system", "content": system_prompt}]
 
@@ -571,13 +665,26 @@ async def _openrouter_stream(
     )
 
     try:
-        client = _get_openrouter_client()
-        stream = await client.chat.completions.create(
-            model=model_id,
-            messages=messages,
-            stream=True,
-            extra_body={"reasoning": {"enabled": True}},
-        )
+        client = _get_llm_client()
+
+        # Try with reasoning support, fall back without it
+        try:
+            stream = await client.chat.completions.create(
+                model=model_id,
+                messages=messages,
+                stream=True,
+                extra_body={"reasoning": {"enabled": True}},
+            )
+        except Exception as e:
+            # Fallback: remove unsupported parameters for local models
+            if "extra_body" in str(e) or "reasoning" in str(e):
+                stream = await client.chat.completions.create(
+                    model=model_id,
+                    messages=messages,
+                    stream=True,
+                )
+            else:
+                raise
 
         async for chunk in stream:
             choice = chunk.choices[0]
@@ -595,9 +702,16 @@ async def _openrouter_stream(
 
 @app.post("/chat")
 async def chat(req: ChatRequest) -> Dict[str, Any]:
-    model_id = req.model or os.getenv("OPENROUTER_MODEL")
+    model_id = (
+        req.model
+        or settings.get("llm_model")
+        or os.getenv("LLM_MODEL")
+        or os.getenv("OPENROUTER_MODEL")
+    )
     queries, chunks = await _fuse_chunks(
-        await _prepare_queries(req.message, model_id, req.query_k, hits=req.hits, k=req.k),
+        await _prepare_queries(
+            req.message, model_id, req.query_k, hits=req.hits, k=req.k
+        ),
         hits=req.hits,
         k=req.k,
     )
@@ -609,7 +723,12 @@ async def chat(req: ChatRequest) -> Dict[str, Any]:
 
 @app.post("/chat-stream")
 async def chat_stream(req: ChatRequest):
-    model_id = req.model or os.getenv("OPENROUTER_MODEL")
+    model_id = (
+        req.model
+        or settings.get("llm_model")
+        or os.getenv("LLM_MODEL")
+        or os.getenv("OPENROUTER_MODEL")
+    )
 
     async def event_stream():
         yield f"data: {json.dumps({'type': 'status', 'payload': 'Generating search queries...'})}\n\n"
@@ -636,7 +755,9 @@ async def chat_stream(req: ChatRequest):
             yield f"data: {json.dumps({'type': 'done', 'payload': 'No relevant context found.'})}\n\n"
             return
         yield f"data: {json.dumps({'type': 'status', 'payload': 'Generating answer...'})}\n\n"
-        async for type_, payload in _openrouter_stream(chunks, req.message, model_id, req.history):
+        async for type_, payload in _openrouter_stream(
+            chunks, req.message, model_id, req.history
+        ):
             yield f"data: {json.dumps({'type': type_, 'payload': payload})}\n\n"
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 

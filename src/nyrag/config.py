@@ -94,6 +94,16 @@ class Config(BaseModel):
             "distance_metric": self.rag_params.get("distance_metric", "angular"),
         }
 
+    def get_llm_config(self) -> Dict[str, Any]:
+        """Get LLM configuration from rag_params."""
+        if self.rag_params is None:
+            return {}
+        return {
+            "llm_base_url": self.rag_params.get("llm_base_url"),
+            "llm_model": self.rag_params.get("llm_model"),
+            "llm_api_key": self.rag_params.get("llm_api_key"),
+        }
+
     def is_web_mode(self) -> bool:
         """Check if config is for web crawling."""
         return self.mode == "web"
