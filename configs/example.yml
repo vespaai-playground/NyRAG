@@ -42,9 +42,9 @@ rag_params:
   # llm_api_key: dummy
   
   # For LM Studio (local):
-  llm_base_url: http://localhost:1234/v1
-  llm_model: openai/gpt-oss-20b
-  llm_api_key: dummy
+  # llm_base_url: http://localhost:1234/v1
+  # llm_model: openai/gpt-oss-20b
+  # llm_api_key: dummy
   
 
   # For vLLM (local or remote):
