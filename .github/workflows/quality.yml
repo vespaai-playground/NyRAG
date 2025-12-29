@@ -1,0 +1,39 @@
+name: Quality Checks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
+    - name: Install quality tools
+      run: |
+        uv pip install black isort flake8
+
+    - name: Check code formatting with black
+      run: |
+        uv run black --check --line-length 119 --target-version py310 --exclude='/(venv|.venv|env|.env)/' .
+
+    - name: Check import sorting with isort
+      run: |
+        uv run isort --check-only --skip venv --skip .venv --skip env --skip .env .
+
+    - name: Lint with flake8
+      run: |
+        uv run flake8 --max-line-length 119 --exclude=venv,.venv,env,.env --ignore=E203,W503 .
