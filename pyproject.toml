@@ -7,7 +7,7 @@ name = "nyrag"
 version = "0.0.7"
 description = "nyrag"
 readme = "README.md"
-requires-python = "==3.10"
+requires-python = ">=3.10,<3.14"
 authors = [
     { name = "abhishek" }
 ]
@@ -21,30 +21,28 @@ classifiers = [
 ]
 keywords = ["nyrag"]
 dependencies = [
-    "loguru==0.7.3",
     "rich>=13.0.0",
-    "fastapi==0.117.1",
-    "uvicorn==0.37.0",
-    "pyyaml>=6.0.0",
+    "fastapi==0.128.0",
+    "uvicorn==0.40.0",
+    "pyyaml>=6.0.3",
     "markitdown>=0.1.4",
     "scrapy>=2.13.4",
     "beautifulsoup4>=4.14.3",
     "pyvespa>=0.62.0",
-    "tqdm>=4.67.1",
     "brotli>=1.2.0",
-    "sentence-transformers>=5.1.2",
-    "httpx>=0.27.0",
-    "jinja2>=3.1.0",
-    "openai>=2.9.0",
+    "sentence-transformers>=5.2.0",
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
+    "openai>=2.14.0",
     "vespacli>=8.620.35",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "black>=24.0.0",
-    "isort>=5.13.0",
-    "flake8>=7.0.0",
-    "pytest>=8.0.0",
+    "black>=25.12.0",
+    "isort>=7.0.0",
+    "flake8>=7.3.0",
+    "pytest>=9.0.2",
 ]
 
 [project.scripts]
