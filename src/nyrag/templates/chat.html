@@ -23,11 +23,6 @@
       </div>
       <p class="hint">Ask a question to retrieve context-aware answers.</p>
       <div id="corpus-stats" class="corpus-stats" aria-live="polite"></div>
-      <div class="project-selector-wrapper">
-        <select id="project-selector" class="project-selector" aria-label="Select Project">
-          <option value="">-- Active Project --</option>
-        </select>
-      </div>
       <div class="header-actions">
         <button id="crawl-btn" class="settings-btn" aria-label="Crawl Data">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -68,6 +63,7 @@
           </svg>
         </button>
       </div>
+      <div id="active-project-indicator" class="active-project-indicator"></div>
     </footer>
   </div>
   <div id="settings-modal" class="modal">
@@ -77,6 +73,12 @@
         <button class="close-btn">&times;</button>
       </div>
       <div class="modal-body">
+        <div class="form-group">
+          <label for="project-selector">Active Project</label>
+          <select id="project-selector" class="project-selector">
+            <option value="">-- Select Project --</option>
+          </select>
+        </div>
         <div class="form-group">
           <label for="hits">Hits (Vespa results)</label>
           <input type="number" id="hits" value="5" min="1" max="50">

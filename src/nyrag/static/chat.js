@@ -6,7 +6,7 @@ const statsEl = document.getElementById("corpus-stats");
 // Settings Modal
 const settingsBtn = document.getElementById("settings-btn");
 const modal = document.getElementById("settings-modal");
-const closeBtn = document.querySelector(".close-btn");
+const closeBtn = modal.querySelector(".close-btn");
 const saveBtn = document.getElementById("save-settings");
 
 settingsBtn.onclick = () => modal.style.display = "block";
@@ -16,7 +16,7 @@ saveBtn.onclick = () => modal.style.display = "none";
 // Crawl Modal
 const crawlBtn = document.getElementById("crawl-btn");
 const crawlModal = document.getElementById("crawl-modal");
-const closeCrawlBtn = document.querySelector(".close-crawl-btn");
+const closeCrawlBtn = crawlModal.querySelector(".close-crawl-btn");
 const startCrawlBtn = document.getElementById("start-crawl-btn");
 const stopCrawlBtn = document.getElementById("stop-crawl-btn");
 const terminalLogs = document.getElementById("terminal-logs");
@@ -453,41 +453,212 @@ function deepMerge(target, source) {
   return target;
 }
 
-// ... Chat Message Logic (Unchanged)
+// ... Chat Message Logic
+let chatHistory = [];
+
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text) return;
 
   addMessage("user", text);
   inputEl.value = "";
+  inputEl.style.height = 'auto'; // Reset height
 
-  const assistantId = addMessage("assistant", "...");
-  const assistantContent = document.getElementById(assistantId).querySelector(".assistant-text");
+  const hits = parseInt(document.getElementById("hits").value) || 5;
+  const k = parseInt(document.getElementById("k").value) || 3;
+  const query_k = parseInt(document.getElementById("query_k").value) || 3;
+
+  // Create assistant bubble with structure
+  const assistantId = addMessage("assistant", "");
+  const bubble = document.getElementById(assistantId).querySelector(".bubble");
+
+  // Add typing indicator
+  const textEl = bubble.querySelector(".assistant-text");
+  textEl.innerHTML = '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+
+  const metaEl = bubble.querySelector(".assistant-meta");
+
+  // State for streaming
+  let fullResponse = "";
+  let thinkingContent = "";
+  let thinkingEl = null;
+  let thinkingBody = null;
+  let statusEl = null;
+  let isAnswerPhase = false;
+  let hasStartedAnswering = false;
+  let chunksCache = [];
 
   try {
     const res = await fetch("/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text }) // Updated key to match ChatRequest model
+      body: JSON.stringify({
+        message: text,
+        history: chatHistory,
+        hits: hits,
+        k: k,
+        query_k: query_k
+      })
     });
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let fullResponse = "";
-
-    assistantContent.innerHTML = "";
+    let buffer = "";
 
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value);
-      fullResponse += chunk;
-      assistantContent.innerHTML = DOMPurify.sanitize(marked.parse(fullResponse));
-      chatEl.scrollTop = chatEl.scrollHeight;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Parse SSE
+      while (true) {
+        const doubleNewline = buffer.indexOf("\n\n");
+        if (doubleNewline === -1) break;
+
+        const raw = buffer.slice(0, doubleNewline);
+        buffer = buffer.slice(doubleNewline + 2);
+
+        const lines = raw.split("\n");
+        let event = null;
+        let dataStr = "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            event = line.substring(7).trim();
+          } else if (line.startsWith("data: ")) {
+            dataStr += line.substring(6);
+          }
+        }
+
+        if (event && dataStr) {
+          try {
+            const data = JSON.parse(dataStr);
+
+            if (event === "status") {
+              if (statusEl) statusEl.remove();
+              statusEl = document.createElement("div");
+              statusEl.className = "status-line";
+              statusEl.textContent = data;
+              metaEl.appendChild(statusEl);
+              if (data.includes("Generating answer")) {
+                isAnswerPhase = true;
+              }
+            } else if (event === "thinking") {
+              // Only show thinking during answer phase (not query generation)
+              if (!isAnswerPhase) continue;
+
+              if (!thinkingEl) {
+                thinkingEl = document.createElement("div");
+                thinkingEl.className = "thinking-section";
+
+                const header = document.createElement("div");
+                header.className = "thinking-header";
+                header.innerHTML = `
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                  Thinking Process
+                `;
+                header.onclick = () => {
+                  thinkingBody.classList.toggle("collapsed");
+                };
+
+                thinkingBody = document.createElement("div");
+                thinkingBody.className = "thinking-content";
+
+                thinkingEl.appendChild(header);
+                thinkingEl.appendChild(thinkingBody);
+                bubble.insertBefore(thinkingEl, textEl);
+              }
+              thinkingContent += data;
+              thinkingBody.textContent = thinkingContent;
+            } else if (event === "queries") {
+              const details = document.createElement("details");
+              details.className = "meta-details";
+              const summary = document.createElement("summary");
+              summary.textContent = `Queries (${data.length})`;
+              details.appendChild(summary);
+
+              const ul = document.createElement("ul");
+              data.forEach((q) => {
+                const li = document.createElement("li");
+                li.textContent = q;
+                ul.appendChild(li);
+              });
+              details.appendChild(ul);
+              metaEl.appendChild(details);
+
+              // Reset thinking for next phase
+              thinkingEl = null;
+              thinkingContent = "";
+            } else if (event === "sources") {
+              chunksCache = data;
+              const locs = [...new Set(data.map(c => c.loc))];
+
+              const details = document.createElement("details");
+              details.className = "meta-details";
+              const summary = document.createElement("summary");
+              summary.textContent = `Sources (${locs.length})`;
+              details.appendChild(summary);
+
+              const ul = document.createElement("ul");
+              locs.forEach((loc) => {
+                const li = document.createElement("li");
+                li.textContent = loc;
+                ul.appendChild(li);
+              });
+              details.appendChild(ul);
+              metaEl.appendChild(details);
+
+              // Reset thinking for next phase
+              thinkingEl = null;
+              thinkingContent = "";
+            } else if (event === "answer") {
+              if (!hasStartedAnswering) {
+                textEl.innerHTML = ""; // Remove typing indicator
+                hasStartedAnswering = true;
+              }
+              fullResponse += data;
+              textEl.innerHTML = DOMPurify.sanitize(marked.parse(fullResponse));
+            } else if (event === "done") {
+              if (statusEl) statusEl.remove();
+              // Append collapsible references after the response
+              if (chunksCache.length) {
+                const wrap = document.createElement("details");
+                wrap.className = "chunks";
+                wrap.open = false;
+
+                const listHtml = chunksCache
+                  .map(
+                    (c) =>
+                      `<details class="chunk-item">
+                        <summary>${c.loc} <span class="score">(${c.score ? c.score.toFixed(2) : '0.00'})</span></summary>
+                        <div class="chunk-content">${c.chunk}</div>
+                      </details>`
+                  )
+                  .join("");
+
+                wrap.innerHTML = `<summary>Relevant sources (${chunksCache.length})</summary><div class="chunk-list">${listHtml}</div>`;
+                bubble.appendChild(wrap);
+              }
+            } else if (event === "error") {
+              if (statusEl) statusEl.remove();
+              textEl.textContent += "\nError: " + data;
+            }
+
+            chatEl.scrollTop = chatEl.scrollHeight;
+
+          } catch (e) {
+            console.error("JSON parse error", e);
+          }
+        }
+      }
     }
 
+    chatHistory.push({ role: "user", content: text });
+    chatHistory.push({ role: "assistant", content: fullResponse });
+
   } catch (e) {
-    assistantContent.textContent = "Error: " + e.message;
+    textEl.textContent = "Error: " + e.message;
   }
 }
 
@@ -500,16 +671,28 @@ inputEl.onkeydown = (e) => {
 };
 
 function addMessage(role, text) {
+  // Remove welcome message if it exists
+  const welcome = document.querySelector('.welcome-message');
+  if (welcome) welcome.remove();
+
   const id = "msg-" + Date.now();
   const div = document.createElement("div");
   div.className = `msg ${role}-msg`;
   div.id = id;
 
-  div.innerHTML = `
-        <div class="bubble">
-            <div class="assistant-text">${role === 'user' ? text : '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>'}</div>
-        </div>
+  if (role === 'user') {
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = text;
+    div.appendChild(bubble);
+  } else {
+    div.innerHTML = `
+      <div class="bubble">
+        <div class="assistant-meta"></div>
+        <div class="assistant-text"></div>
+      </div>
     `;
+  }
   chatEl.appendChild(div);
   chatEl.scrollTop = chatEl.scrollHeight;
   return id;
@@ -536,7 +719,7 @@ async function loadProjects() {
     const projects = await res.json();
 
     // Maintain default option
-    projectSelector.innerHTML = '<option value="">-- Active Project --</option>';
+    projectSelector.innerHTML = '<option value="">-- Select Project --</option>';
 
     projects.forEach(p => {
       const opt = document.createElement("option");
@@ -544,13 +727,18 @@ async function loadProjects() {
       opt.textContent = p;
       projectSelector.appendChild(opt);
     });
+
+    // Auto-select if only one project
+    if (projects.length === 1) {
+      projectSelector.value = projects[0];
+      await selectProject(projects[0]);
+    }
   } catch (e) {
     console.error("Failed to load projects", e);
   }
 }
 
-projectSelector.onchange = async () => {
-  const projectName = projectSelector.value;
+async function selectProject(projectName) {
   if (!projectName) return;
 
   try {
@@ -562,21 +750,32 @@ projectSelector.onchange = async () => {
 
     const data = await res.json();
     if (data.status === "success") {
-      // Clear chat
-      chatEl.innerHTML = `
-        <div class="welcome-message">
-          <h2>Active Project: ${projectName}</h2>
-          <p style="margin-top: 8px; font-size: 14px; opacity: 0.6;">Settings loaded from output/${projectName}/conf.yml</p>
-        </div>
-      `;
+      // Update active project indicator
+      const indicator = document.getElementById("active-project-indicator");
+      if (indicator) {
+        indicator.textContent = `Project: ${projectName}`;
+      }
       // Refresh stats
       fetchStats();
+      chatHistory = [];
     }
   } catch (e) {
     console.error("Failed to select project", e);
-    alert("Error switching project: " + e.message);
   }
+}
+
+projectSelector.onchange = async () => {
+  await selectProject(projectSelector.value);
 };
+
+// Auto-resize textarea
+inputEl.addEventListener('input', function () {
+  this.style.height = 'auto';
+  this.style.height = (this.scrollHeight) + 'px';
+  if (this.value === '') {
+    this.style.height = 'auto';
+  }
+});
 
 // Initial calls
 loadProjects();

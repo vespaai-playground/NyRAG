@@ -159,15 +159,15 @@ def load_project_settings(project_name: str) -> Dict[str, Any]:
     """Load settings from a specific project's conf.yml."""
     vespa_url = (os.getenv("VESPA_URL") or "").strip() or "http://localhost"
     vespa_port = resolve_vespa_port(vespa_url)
-    
+
     config_path = Path("output") / project_name / "conf.yml"
     if not config_path.exists():
         raise FileNotFoundError(f"Project config not found: {config_path}")
-    
+
     cfg = Config.from_yaml(str(config_path))
     rag_params = cfg.rag_params or {}
     llm_config = cfg.get_llm_config()
-    
+
     return {
         "app_package_name": cfg.get_app_package_name(),
         "schema_name": cfg.get_schema_name(),
@@ -192,12 +192,13 @@ class CrawlManager:
 
         # Parse config to get output path and save conf.yml
         import yaml
+
         config_data = yaml.safe_load(config_yaml) or {}
         project_name = config_data.get("name", "project")
         schema_name = _normalize_project_name(str(project_name))
         output_dir = Path("output") / schema_name
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Save config to output folder
         config_path = output_dir / "conf.yml"
         with open(config_path, "w") as f:
@@ -235,7 +236,7 @@ class CrawlManager:
                 await q.put(decoded_line)
 
         await self.process.wait()
-        
+
         # Cleanup temp file
         if self.temp_config_path and os.path.exists(self.temp_config_path):
             try:
@@ -256,11 +257,11 @@ class CrawlManager:
                 await asyncio.wait_for(self.process.wait(), timeout=5.0)
             except asyncio.TimeoutError:
                 self.process.kill()
-            
+
             # Notify subscribers
             for q in self.subscribers:
                 await q.put("EOF")
-            
+
             return True
         return False
 
@@ -306,10 +307,10 @@ base_dir = Path(__file__).parent
 templates = Jinja2Templates(directory=str(base_dir / "templates"))
 app.mount("/static", StaticFiles(directory=str(base_dir / "static")), name="static")
 
+
 @app.get("/", response_class=HTMLResponse)
 async def get(request: Request):
     return templates.TemplateResponse("chat.html", {"request": request})
-
 
 
 def _deep_find_numeric_field(obj: Any, key: str) -> Optional[float]:
@@ -396,8 +397,10 @@ async def get_config(project_name: Optional[str] = None) -> Dict[str, str]:
         return {"content": ""}
     config_path = _resolve_config_path(project_name=project_name)
     if not config_path.exists():
-        raise HTTPException(status_code=404, detail=f"Project config not found: {config_path}")
-    
+        raise HTTPException(
+            status_code=404, detail=f"Project config not found: {config_path}"
+        )
+
     with open(config_path, "r") as f:
         return {"content": f.read()}
 
@@ -411,7 +414,7 @@ async def save_config(config: ConfigContent):
         f.write(config.content)
     global active_project
     active_project = config_path.parent.name
-    
+
     return {"status": "saved"}
 
 
@@ -935,9 +938,7 @@ async def _call_openrouter(
 async def chat(req: ChatRequest):
     """Chat endpoint supporting retrieval, reasoning, and summarization."""
     try:
-        return StreamingResponse(
-            _chat_stream(req), media_type="text/plain"
-        )
+        return StreamingResponse(_chat_stream(req), media_type="text/event-stream")
     except Exception as e:
         logger.error(f"Chat error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -945,34 +946,46 @@ async def chat(req: ChatRequest):
 
 async def _chat_stream(req: ChatRequest):
     """
-    Stream the chat process:
-    1. Search query generation (showing thinking)
-    2. Retrieval (showing sources)
-    3. Final answer generation (showing thinking + text)
+    Stream the chat process using Server-Sent Events (SSE).
+    Events: 'status', 'thinking', 'queries', 'sources', 'thinking_answer', 'answer'
     """
+
+    def sse(event: str, data: Any) -> str:
+        # Ensure data is JSON serializable
+        return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
     # 1. Expand queries
+    yield sse("status", "Generating search queries...")
     model_id = _resolve_model_id(req.model)
     queries = []
+
     async for event_type, payload in _prepare_queries_stream(
         req.message, model_id, req.query_k, req.hits, req.k, history=req.history
     ):
         if event_type == "thinking":
-            # Pass through reasoning from query generator if needed?
-            # For now we ignore it to reduce noise, or we could stream it.
-            pass
+            yield sse("thinking", payload)
         elif event_type == "result":
             queries = payload
+            yield sse("queries", queries)
 
     # 2. Retrieve and Fuse
+    yield sse("status", "Retrieving context from Vespa...")
     used_queries, chunks = await _fuse_chunks(queries, req.hits, req.k)
+    yield sse("sources", chunks)
+
+    if not chunks:
+        yield sse("answer", "No relevant context found.")
+        yield sse("done", None)
+        return
 
     # 3. Final Generation
+    yield sse("status", "Generating answer...")
     system_prompt = (
         "You are a helpful assistant. "
         "Answer the user's question using ONLY the provided context chunks. "
         "If the answer is not in the chunks, say so. "
         "Do not hallucinate. "
-        "Cite the location of information using [filename] if possible."
+        "Cite the location of information using `[filename]` if possible."
     )
 
     context_text = ""
@@ -985,11 +998,13 @@ async def _chat_stream(req: ChatRequest):
     # Add history
     for msg in req.history[-4:]:
         messages.append({"role": msg.get("role"), "content": msg.get("content")})
-    
-    messages.append({
-        "role": "user",
-        "content": f"Context:\n{context_text}\n\nQuestion: {req.message}"
-    })
+
+    messages.append(
+        {
+            "role": "user",
+            "content": f"Context:\n{context_text}\n\nQuestion: {req.message}",
+        }
+    )
 
     client = _get_llm_client()
     try:
@@ -998,16 +1013,24 @@ async def _chat_stream(req: ChatRequest):
             model=model_id,
             messages=messages,
             stream=True,
-            enable_reasoning=True
+            enable_reasoning=True,
         )
 
         async for chunk in stream:
-             choice = chunk.choices[0]
-             delta = choice.delta
-             
-             content = _extract_message_text(getattr(delta, "content", None))
-             if content:
-                 yield content
+            choice = chunk.choices[0]
+            delta = choice.delta
+
+            # Check for reasoning (e.g. DeepSeek R1)
+            reasoning = getattr(delta, "reasoning", None)
+            reasoning_text = _extract_message_text(reasoning)
+            if reasoning_text:
+                yield sse("thinking", reasoning_text)
+
+            content = _extract_message_text(getattr(delta, "content", None))
+            if content:
+                yield sse("answer", content)
+
+        yield sse("done", None)
 
     except Exception as e:
-        yield f"Error generating response: {str(e)}"
+        yield sse("error", str(e))
