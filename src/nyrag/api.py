@@ -40,6 +40,7 @@ def _normalize_project_name(name: str) -> str:
 def _resolve_config_path(
     project_name: Optional[str] = None,
     config_yaml: Optional[str] = None,
+    active_project: Optional[str] = None,
 ) -> Path:
     if project_name:
         return Path("output") / project_name / "conf.yml"
@@ -383,7 +384,7 @@ async def get_config(project_name: Optional[str] = None) -> Dict[str, str]:
     """Get content of the project configuration file."""
     if not project_name and not active_project:
         return {"content": ""}
-    config_path = _resolve_config_path(project_name=project_name)
+    config_path = _resolve_config_path(project_name=project_name, active_project=active_project)
     if not config_path.exists():
         raise HTTPException(status_code=404, detail=f"Project config not found: {config_path}")
 
@@ -394,7 +395,7 @@ async def get_config(project_name: Optional[str] = None) -> Dict[str, str]:
 @app.post("/config")
 async def save_config(config: ConfigContent):
     """Save content to the project configuration file."""
-    config_path = _resolve_config_path(config_yaml=config.content)
+    config_path = _resolve_config_path(config_yaml=config.content, active_project=active_project)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     with open(config_path, "w") as f:
         f.write(config.content)
