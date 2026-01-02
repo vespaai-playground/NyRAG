@@ -1,0 +1,34 @@
+services:
+  vespa:
+    image: vespaengine/vespa:latest
+    hostname: vespa
+    ports:
+      - "8080:8080"
+      - "19071:19071"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:19071/ApplicationStatus"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  ui:
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      NYRAG_CONFIG: /app/configs/example.yml
+      NYRAG_VESPA_COMPOSE: "1"
+      NYRAG_VESPA_DOCKER_MODE: compose
+      VESPA_URL: http://vespa
+      VESPA_PORT: "8080"
+      VESPA_CONFIGSERVER_URL: http://vespa:19071
+      NYRAG_VESPA_CONFIGSERVER_URL: http://vespa:19071
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./output:/app/output
+    depends_on:
+      vespa:
+        condition: service_healthy

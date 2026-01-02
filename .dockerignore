@@ -1,0 +1,10 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+.build
+.dist
+htmlcov
+output

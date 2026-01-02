@@ -9,6 +9,7 @@ from vespa.package import ApplicationPackage
 
 from nyrag.logger import console, logger
 from nyrag.utils import _truthy_env
+from nyrag.vespa_docker import resolve_vespa_docker_class
 
 
 _CLUSTER_REMOVAL_ALLOWLIST_TOKEN = "content-cluster-removal"
@@ -185,10 +186,13 @@ def deploy_app_package(
                 app_package.to_files(str(effective_app_dir))
 
             if mode == "docker":
-                from vespa.deployment import VespaDocker  # type: ignore
+                VespaDocker = resolve_vespa_docker_class()
 
                 image = os.getenv("NYRAG_VESPA_DOCKER_IMAGE", "vespaengine/vespa:latest")
-                logger.info(f"Deploying with VespaDocker (image={image})")
+                if VespaDocker.__name__ == "ComposeVespaDocker":
+                    logger.info("Deploying with ComposeVespaDocker")
+                else:
+                    logger.info(f"Deploying with VespaDocker (image={image})")
 
                 import inspect
 

@@ -29,7 +29,6 @@ rag_params:
   
   # Optional: LLM configuration (works with any OpenAI-compatible API)
   # If not set, will use environment variables (LLM_BASE_URL, LLM_MODEL, LLM_API_KEY)
-  # or fall back to OpenRouter (OPENROUTER_API_KEY, OPENROUTER_MODEL)
   
   # For OpenRouter (default):
   # llm_base_url: https://openrouter.ai/api/v1

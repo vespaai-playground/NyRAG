@@ -542,11 +542,17 @@ details.chunks[open]>summary::before {
   display: none;
 }
 
-/* Settings Button */
-.settings-btn {
+/* Header Actions */
+.header-actions {
   position: absolute;
   right: 24px;
   top: 24px;
+  display: flex;
+  gap: 8px;
+}
+
+/* Settings Button */
+.settings-btn {
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -587,8 +593,15 @@ details.chunks[open]>summary::before {
 }
 
 @keyframes modalFadeIn {
-  from { opacity: 0; transform: translateY(-20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .modal-header {
