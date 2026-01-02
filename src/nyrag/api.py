@@ -30,7 +30,34 @@ from nyrag.utils import (
 DEFAULT_ENDPOINT = "http://localhost:8080"
 DEFAULT_RANKING = "default"
 DEFAULT_SUMMARY = "top_k_chunks"
-CONFIG_FILE = "nyrag_config.yml"
+
+
+def _normalize_project_name(name: str) -> str:
+    clean_name = name.replace("-", "").replace("_", "").lower()
+    return f"nyrag{clean_name}"
+
+
+def _resolve_config_path(
+    project_name: Optional[str] = None,
+    config_yaml: Optional[str] = None,
+) -> Path:
+    if project_name:
+        return Path("output") / project_name / "conf.yml"
+
+    if config_yaml is not None:
+        import yaml
+
+        try:
+            config_data = yaml.safe_load(config_yaml) or {}
+        except yaml.YAMLError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid YAML: {exc}") from exc
+        raw_name = config_data.get("name") or "project"
+        schema_name = _normalize_project_name(str(raw_name))
+        return Path("output") / schema_name / "conf.yml"
+
+    if active_project:
+        return Path("output") / active_project / "conf.yml"
+    raise HTTPException(status_code=400, detail="project_name is required")
 
 
 class SearchRequest(BaseModel):
@@ -165,10 +192,9 @@ class CrawlManager:
 
         # Parse config to get output path and save conf.yml
         import yaml
-        config_data = yaml.safe_load(config_yaml)
+        config_data = yaml.safe_load(config_yaml) or {}
         project_name = config_data.get("name", "project")
-        clean_name = project_name.replace("-", "").replace("_", "").lower()
-        schema_name = f"nyrag{clean_name}"
+        schema_name = _normalize_project_name(str(project_name))
         output_dir = Path("output") / schema_name
         output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -255,7 +281,7 @@ class CrawlManager:
 
 crawl_manager = CrawlManager()
 
-
+active_project: Optional[str] = None
 settings = _load_settings()
 logger = get_logger("api")
 app = FastAPI(title="nyrag API", version="0.1.0")
@@ -364,12 +390,13 @@ async def get_config_schema(mode: str = "web") -> Dict[str, Any]:
 
 
 @app.get("/config")
-async def get_config() -> Dict[str, str]:
+async def get_config(project_name: Optional[str] = None) -> Dict[str, str]:
     """Get content of the project configuration file."""
-    config_path = Path(CONFIG_FILE)
-    if not config_path.exists():
-        # Return empty on purpose if missing, or we could return default structure
+    if not project_name and not active_project:
         return {"content": ""}
+    config_path = _resolve_config_path(project_name=project_name)
+    if not config_path.exists():
+        raise HTTPException(status_code=404, detail=f"Project config not found: {config_path}")
     
     with open(config_path, "r") as f:
         return {"content": f.read()}
@@ -378,10 +405,12 @@ async def get_config() -> Dict[str, str]:
 @app.post("/config")
 async def save_config(config: ConfigContent):
     """Save content to the project configuration file."""
-    # Security: Ensure we are only writing to the allowed filename in CWD
-    # (Though CWD is trusted here as per instructions)
-    with open(CONFIG_FILE, "w") as f:
+    config_path = _resolve_config_path(config_yaml=config.content)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(config_path, "w") as f:
         f.write(config.content)
+    global active_project
+    active_project = config_path.parent.name
     
     return {"status": "saved"}
 
@@ -401,9 +430,10 @@ async def get_projects():
 @app.post("/projects/select")
 async def select_project(project_name: str = Body(..., embed=True)):
     """Select a project and load its settings."""
-    global settings
+    global active_project, settings
     try:
         settings = load_project_settings(project_name)
+        active_project = project_name
         return {"status": "success", "settings": settings}
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -550,6 +580,21 @@ def _get_llm_client() -> AsyncOpenAI:
         )
 
     return AsyncOpenAI(base_url=base_url, api_key=api_key)
+
+
+def _resolve_model_id(request_model: Optional[str]) -> str:
+    model_id = (
+        (request_model or "").strip()
+        or (settings.get("llm_model") or "").strip()
+        or (os.getenv("LLM_MODEL") or "").strip()
+    )
+    if not model_id:
+        raise HTTPException(
+            status_code=500,
+            detail="LLM model not set. Configure llm_config.model in the project config, "
+            "set LLM_MODEL, or pass model in the request.",
+        )
+    return model_id
 
 
 async def _create_chat_completion_with_fallback(
@@ -780,6 +825,7 @@ async def _prepare_queries_stream(
 async def _prepare_queries(
     user_message: str, model_id: str, query_k: int, hits: int, k: int
 ) -> List[str]:
+    model_id = _resolve_model_id(model_id)
     queries = []
     async for event_type, payload in _prepare_queries_stream(
         user_message, model_id, query_k, hits, k
@@ -852,6 +898,7 @@ async def _fuse_chunks(
 async def _call_openrouter(
     context: List[Dict[str, str]], user_message: str, model_id: str
 ) -> str:
+    model_id = _resolve_model_id(model_id)
     system_prompt = (
         "You are a helpful assistant. "
         "Answer user's question using only the provided context. "
@@ -904,9 +951,10 @@ async def _chat_stream(req: ChatRequest):
     3. Final answer generation (showing thinking + text)
     """
     # 1. Expand queries
+    model_id = _resolve_model_id(req.model)
     queries = []
     async for event_type, payload in _prepare_queries_stream(
-        req.message, req.model, req.query_k, req.hits, req.k, history=req.history
+        req.message, model_id, req.query_k, req.hits, req.k, history=req.history
     ):
         if event_type == "thinking":
             # Pass through reasoning from query generator if needed?
@@ -947,7 +995,7 @@ async def _chat_stream(req: ChatRequest):
     try:
         stream = await _create_chat_completion_with_fallback(
             client=client,
-            model=req.model,
+            model=model_id,
             messages=messages,
             stream=True,
             enable_reasoning=True

@@ -270,7 +270,11 @@ async function loadSchema(mode) {
 
 async function loadProjectConfig() {
   try {
-    const res = await fetch("/config");
+    const projectName = projectSelector.value;
+    const url = projectName
+      ? `/config?project_name=${encodeURIComponent(projectName)}`
+      : "/config";
+    const res = await fetch(url);
     const data = await res.json();
 
     let parsed = {};
