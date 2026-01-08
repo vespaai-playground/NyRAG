@@ -42,7 +42,7 @@ def main():
         logger.info("Vespa feeding enabled - documents will be fed to Vespa as they are processed")
 
         # Process based on config
-        process_from_config(config, resume=args.resume)
+        process_from_config(config, resume=args.resume, config_path=args.config)
 
         logger.success(f"Processing complete! Output saved to {config.get_output_path()}")
 

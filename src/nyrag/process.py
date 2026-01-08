@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from markitdown import MarkItDown, StreamInfo
 
@@ -81,7 +81,23 @@ def save_to_jsonl(
     logger.debug(f"Saved to {file_path}")
 
 
-def process_from_config(config: Config, resume: bool = False):
+def _persist_config(config_path: Optional[str], output_dir: Path) -> None:
+    """Save the original YAML config for UI project selection."""
+    if not config_path:
+        return
+    config_file = Path(config_path)
+    if not config_file.exists():
+        logger.warning(f"Config file not found: {config_file}")
+        return
+    conf_path = output_dir / "conf.yml"
+    try:
+        conf_path.write_text(config_file.read_text(encoding="utf-8"), encoding="utf-8")
+        logger.info(f"Config saved to {conf_path}")
+    except Exception as e:
+        logger.warning(f"Failed to save config to {conf_path}: {e}")
+
+
+def process_from_config(config: Config, resume: bool = False, config_path: Optional[str] = None):
     """
     Process based on configuration file.
 
@@ -103,6 +119,8 @@ def process_from_config(config: Config, resume: bool = False):
         raise SystemExit(1)
 
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    _persist_config(config_path, output_dir)
 
     # Step 1: Create and save Vespa schema
     _create_schema(config)
