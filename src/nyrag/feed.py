@@ -15,6 +15,38 @@ DEFAULT_HOST = "http://localhost"
 DEFAULT_PORT = 8080
 
 
+def _sanitize_xml_content(text: str) -> str:
+    """Remove illegal control characters from text for XML/JSON compatibility.
+
+    XML/JSON only allows these control characters:
+    - 0x09 (TAB)
+    - 0x0A (LF - Line Feed)
+    - 0x0D (CR - Carriage Return)
+
+    All other control characters (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F) are removed.
+
+    Args:
+        text: Input text that may contain illegal control characters
+
+    Returns:
+        Sanitized text with illegal control characters removed
+    """
+    if not text:
+        return text
+
+    # Remove illegal control characters (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F)
+    # Keep: 0x09 (TAB), 0x0A (LF), 0x0D (CR), and all printable/Unicode characters
+    sanitized = "".join(
+        char for char in text
+        if ord(char) == 0x09  # TAB
+        or ord(char) == 0x0A  # LF
+        or ord(char) == 0x0D  # CR
+        or (ord(char) >= 0x20 and ord(char) != 0x7F)  # Printable chars (excluding DEL)
+        or ord(char) > 0x7F  # Unicode characters
+    )
+    return sanitized
+
+
 class VespaFeeder:
     """Feed processed data (content, chunks, embeddings) into Vespa."""
 
@@ -102,10 +134,13 @@ class VespaFeeder:
         if not content:
             raise ValueError("Record is missing content")
 
+        content = _sanitize_xml_content(content)
+
         loc = record.get("loc", "").strip()
         data_id = self._make_id(loc)
 
         chunk_texts = chunks(content, chunk_size=self.chunk_size, overlap=self.chunk_overlap)
+        chunk_texts = [_sanitize_xml_content(chunk) for chunk in chunk_texts]
         logger.info(f"Prepared record id={data_id} with {len(chunk_texts)} chunks ")
 
         # Batch encode content + chunks to minimize model calls
