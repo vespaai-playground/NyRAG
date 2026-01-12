@@ -125,7 +125,7 @@ def _create_schema(config: Config) -> DeployResult:
 
     Args:
         config: Configuration object
-        
+
     Returns:
         DeployResult with endpoint information from deployment.
     """
@@ -151,18 +151,18 @@ def _create_schema(config: Config) -> DeployResult:
     if not deploy_result.success:
         logger.error("Vespa deploy failed; aborting.")
         raise SystemExit(1)
-    
+
     return deploy_result
 
 
 def _persist_config_with_endpoint(
-    config: Config, 
-    output_dir: Path, 
+    config: Config,
+    output_dir: Path,
     config_path: Optional[str],
     deploy_result: Optional[DeployResult] = None,
 ) -> None:
     """Persist config to output conf.yml with resolved Vespa endpoint info.
-    
+
     Uses deploy_result if available (from VespaCloud.get_mtls_endpoint() etc),
     otherwise falls back to config methods.
     """
@@ -180,7 +180,7 @@ def _persist_config_with_endpoint(
     if deploy_result and deploy_result.vespa_url:
         data["vespa_url"] = deploy_result.vespa_url.rstrip("/")
         data["vespa_port"] = deploy_result.vespa_port or 443
-        
+
         # Store additional cloud endpoint info for reference
         if deploy_result.mtls_endpoint:
             data["vespa_mtls_endpoint"] = deploy_result.mtls_endpoint

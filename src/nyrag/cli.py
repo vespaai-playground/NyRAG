@@ -5,7 +5,7 @@ import sys
 from nyrag.config import Config
 from nyrag.logger import logger
 from nyrag.process import process_from_config
-from nyrag.vespa_cli import vespa_auth_login, set_vespa_target_cloud
+from nyrag.vespa_cli import set_vespa_target_cloud, vespa_auth_login
 
 
 def cmd_process(args):
@@ -50,16 +50,20 @@ def cmd_ui(args):
 
             logger.info("Initiating Vespa Cloud authentication...")
             logger.info("Please complete the login in your browser to continue.")
-            
+
             if not vespa_auth_login():
                 logger.error("Vespa Cloud authentication failed or was cancelled.")
                 sys.exit(1)
-            
+
             logger.success("Vespa Cloud authentication successful!")
             # Set environment variable so API knows we're in cloud mode
             os.environ["NYRAG_CLOUD_MODE"] = "1"
 
         from nyrag.api import app
+
+        # Also set state on the app object to be sure
+        if args.cloud:
+            app.state.cloud_mode = True
 
         logger.info(f"Starting UI server on {args.host}:{args.port}")
         uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)

@@ -9,13 +9,13 @@ from typing import Any, Dict, Optional, Tuple
 
 def set_vespa_target_cloud() -> bool:
     """Set Vespa CLI target to cloud mode.
-    
+
     Returns:
         True if successful, False otherwise.
     """
     if shutil.which("vespa") is None:
         return False
-    
+
     try:
         result = subprocess.run(
             ["vespa", "config", "set", "target", "cloud"],
@@ -31,16 +31,16 @@ def set_vespa_target_cloud() -> bool:
 
 def vespa_auth_login() -> bool:
     """Run vespa auth login for interactive cloud authentication.
-    
+
     This opens a browser for OAuth authentication with Vespa Cloud.
     Does not require tenant/application - those are configured later in UI.
-    
+
     Returns:
         True if authentication succeeded, False otherwise.
     """
     if shutil.which("vespa") is None:
         return False
-    
+
     try:
         # Run vespa auth login interactively (it will open browser)
         result = subprocess.run(
@@ -55,7 +55,7 @@ def vespa_auth_login() -> bool:
 
 def is_vespa_cloud_authenticated() -> bool:
     """Check if user is authenticated with Vespa Cloud.
-    
+
     Returns:
         True if valid authentication exists, False otherwise.
     """
@@ -70,20 +70,20 @@ def is_vespa_cloud_authenticated() -> bool:
                 return True
         except Exception:
             pass
-    
+
     # Also check API key as fallback
     config = get_vespa_cli_cloud_config()
     if config.get("api_key") or config.get("api_key_path"):
         return True
-    
+
     return False
 
 
 def get_vespa_cloud_secret_token() -> Optional[str]:
     """Get Vespa Cloud secret token from environment or CLI config.
-    
+
     The token is used for data-plane authentication (feeding/querying).
-    
+
     Returns:
         The secret token if found, None otherwise.
     """
@@ -91,7 +91,7 @@ def get_vespa_cloud_secret_token() -> Optional[str]:
     token = os.getenv("VESPA_CLOUD_SECRET_TOKEN")
     if token:
         return token
-    
+
     # Check CLI config for token
     config = load_vespa_cli_config()
     if config:
@@ -99,14 +99,14 @@ def get_vespa_cloud_secret_token() -> Optional[str]:
         for key in ("secret_token", "secretToken", "data_plane_token", "token"):
             if key in config and isinstance(config[key], str):
                 return config[key]
-        
+
         # Check in auth section
         auth = config.get("auth", {})
         if isinstance(auth, dict):
             for key in ("secret_token", "secretToken", "token"):
                 if key in auth and isinstance(auth[key], str):
                     return auth[key]
-    
+
     return None
 
 
@@ -270,7 +270,9 @@ def get_vespa_cli_cloud_config() -> Dict[str, Optional[str]]:
     cert = _pick_str(auth, "cert", "certificate", "client_cert", "clientCert", "dataPlaneCert", "data_plane_cert")
     key = _pick_str(auth, "key", "private_key", "client_key", "clientKey", "dataPlaneKey", "data_plane_key")
     if not cert:
-        cert = _pick_str(target, "cert", "certificate", "client_cert", "clientCert", "dataPlaneCert", "data_plane_cert")
+        cert = _pick_str(
+            target, "cert", "certificate", "client_cert", "clientCert", "dataPlaneCert", "data_plane_cert"
+        )
     if not key:
         key = _pick_str(target, "key", "private_key", "client_key", "clientKey", "dataPlaneKey", "data_plane_key")
 

@@ -18,13 +18,27 @@ from sentence_transformers import SentenceTransformer
 from nyrag.config import Config, get_config_options, get_example_configs
 from nyrag.defaults import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_BASE_URL, DEFAULT_VESPA_LOCAL_PORT, DEFAULT_VESPA_URL
 from nyrag.logger import get_logger
-from nyrag.utils import get_cloud_secret_token, get_tls_config_from_deploy, make_vespa_client, resolve_vespa_cloud_mtls_paths
+from nyrag.utils import (
+    get_cloud_secret_token,
+    get_tls_config_from_deploy,
+    make_vespa_client,
+    resolve_vespa_cloud_mtls_paths,
+)
 from nyrag.vespa_cli import is_vespa_cloud_authenticated
 
 
 DEFAULT_ENDPOINT = "http://localhost:8080"
 DEFAULT_RANKING = "default"
 DEFAULT_SUMMARY = "top_k_chunks"
+
+
+def _is_cloud_mode() -> bool:
+    """Check if running in cloud mode via env var or app state."""
+    # Check env var first
+    if os.getenv("NYRAG_CLOUD_MODE") == "1":
+        return True
+    # Check app state (set by CLI)
+    return getattr(app.state, "cloud_mode", False)
 
 
 def _get_settings_file_path() -> Path:
@@ -121,12 +135,12 @@ def _resolve_mtls_paths(
     config: Optional[Config], project_folder: Optional[str]
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Resolve mTLS paths and cloud token from config or default locations.
-    
+
     Returns:
         Tuple of (cert_path, key_path, cloud_token)
     """
     deploy_config = config.get_deploy_config() if config else None
-    
+
     # For cloud mode, prefer token-based auth
     if deploy_config and deploy_config.is_cloud_mode():
         cloud_token = get_cloud_secret_token(deploy_config)
@@ -370,7 +384,7 @@ def _create_vespa_client(current_settings: Dict[str, Any]) -> Any:
     ca, verify = None, None
     if config:
         _, _, ca, verify = get_tls_config_from_deploy(config.get_deploy_config())
-    
+
     return make_vespa_client(
         current_settings["vespa_url"],
         current_settings["vespa_port"],
@@ -392,7 +406,14 @@ app.mount("/static", StaticFiles(directory=str(base_dir / "static")), name="stat
 
 @app.get("/", response_class=HTMLResponse)
 async def get(request: Request):
-    return templates.TemplateResponse("chat.html", {"request": request})
+    deploy_mode = "cloud" if _is_cloud_mode() else "local"
+    return templates.TemplateResponse(
+        "chat.html",
+        {
+            "request": request,
+            "deploy_mode": deploy_mode,
+        },
+    )
 
 
 def _deep_find_numeric_field(obj: Any, key: str) -> Optional[float]:
@@ -423,20 +444,22 @@ async def stats() -> Dict[str, Any]:
     """Return simple corpus statistics from Vespa (documents and chunks)."""
     doc_count: Optional[int] = None
     chunk_count: Optional[int] = None
-    
+
     # Determine deploy mode and auth status
+    # NYRAG_CLOUD_MODE env var (set by --cloud flag) takes precedence over config
     deploy_mode = "local"
     is_authenticated = True  # Local mode doesn't need auth
-    
-    _cfg = settings.get("config")
-    if _cfg:
-        deploy_mode = _cfg.deploy_mode
-        if deploy_mode == "cloud":
-            # Check if we have valid cloud credentials
-            is_authenticated = is_vespa_cloud_authenticated()
-    elif os.getenv("NYRAG_CLOUD_MODE") == "1":
+
+    if _is_cloud_mode():
         deploy_mode = "cloud"
         is_authenticated = is_vespa_cloud_authenticated()
+    else:
+        _cfg = settings.get("config")
+        if _cfg:
+            deploy_mode = _cfg.deploy_mode
+            if deploy_mode == "cloud":
+                # Check if we have valid cloud credentials
+                is_authenticated = is_vespa_cloud_authenticated()
 
     try:
         res = vespa_app.query(
@@ -514,8 +537,23 @@ async def save_config(config: ConfigContent):
 
 @app.get("/config/examples")
 async def list_example_configs() -> Dict[str, str]:
-    """List available template configurations."""
-    return get_example_configs()
+    """List available template configurations.
+
+    When running with --cloud flag (NYRAG_CLOUD_MODE=1), automatically
+    updates deploy_mode in templates from 'local' to 'cloud'.
+    """
+    examples = get_example_configs()
+
+    # If running in cloud mode, update deploy_mode in templates
+    if _is_cloud_mode():
+        updated_examples = {}
+        for name, content in examples.items():
+            # Replace deploy_mode: local with deploy_mode: cloud
+            updated_content = content.replace("deploy_mode: local", "deploy_mode: cloud")
+            updated_examples[name] = updated_content
+        return updated_examples
+
+    return examples
 
 
 @app.get("/config/mode")
@@ -526,6 +564,17 @@ async def get_config_mode():
         "config_path": None,
         "allow_project_selection": True,
     }
+
+
+@app.get("/deploy-mode")
+async def get_deploy_mode():
+    """Get the current deployment mode (local or cloud).
+
+    This endpoint is used by the UI to determine which mode to display
+    and which defaults to use.
+    """
+    is_cloud = _is_cloud_mode()
+    return {"mode": "cloud" if is_cloud else "local"}
 
 
 @app.get("/projects")

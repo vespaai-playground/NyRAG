@@ -82,7 +82,7 @@ class VespaFeeder:
     ):
         deploy_config = self.config.get_deploy_config()
         cert_path, key_path, ca_cert, verify = get_tls_config_from_deploy(deploy_config)
-        
+
         # Get cloud secret token for token-based auth (preferred for cloud)
         cloud_token = None
         if deploy_config.is_cloud_mode():
@@ -109,11 +109,11 @@ class VespaFeeder:
 
         logger.info(f"Connecting to Vespa at {vespa_url}:{vespa_port}")
         return make_vespa_client(
-            vespa_url, 
-            vespa_port, 
-            cert_path, 
-            key_path, 
-            ca_cert, 
+            vespa_url,
+            vespa_port,
+            cert_path,
+            key_path,
+            ca_cert,
             verify,
             vespa_cloud_secret_token=cloud_token,
         )

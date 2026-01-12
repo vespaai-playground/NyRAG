@@ -64,18 +64,20 @@ let exampleConfigs = {}; // Example configs from API
 let currentMode = "chat"; // "chat" or "feed"
 let hasData = false; // Whether corpus has data
 let deployMode = "local"; // "local" or "cloud"
+let deployModeSource = null; // "deploy-mode" or "stats"
 let activeProjectName = null; // Currently selected project
+const serverDeployMode = document.body?.dataset?.deployMode;
 
 // Mode Toggle Logic
 function setMode(mode) {
   currentMode = mode;
-  
+
   // Show/hide appropriate panels
   if (mode === "chat") {
     if (chatEl) chatEl.style.display = "flex";
     if (feedPanel) feedPanel.style.display = "none";
     if (composerArea) composerArea.style.display = "flex";
-    
+
     // Show welcome or no-data message based on data availability
     if (hasData) {
       if (welcomeMessage) welcomeMessage.style.display = "block";
@@ -97,7 +99,7 @@ function setMode(mode) {
     if (chatEl) chatEl.style.display = "none";
     if (feedPanel) feedPanel.style.display = "flex";
     if (composerArea) composerArea.style.display = "none";
-    
+
     // Load feed panel content - only load project config if we have an active project
     (async () => {
       if (activeProjectName) {
@@ -120,12 +122,31 @@ if (switchToFeedBtn) {
 }
 
 // Update deploy mode badge
-function updateDeployModeBadge(mode) {
-  deployMode = mode;
-  if (deployModeBadge) {
-    deployModeBadge.textContent = mode;
-    deployModeBadge.className = "deploy-mode-badge " + mode;
+function updateDeployModeBadge(mode, source = "stats") {
+  if (!mode) return;
+  const normalizedMode = String(mode).toLowerCase();
+  if (normalizedMode !== "local" && normalizedMode !== "cloud") {
+    return;
   }
+  if (deployModeSource === "deploy-mode" && source !== "deploy-mode") {
+    return;
+  }
+  deployModeSource = source;
+  deployMode = normalizedMode;
+  if (deployModeBadge) {
+    deployModeBadge.textContent = deployMode;
+    deployModeBadge.className = "deploy-mode-badge " + deployMode;
+  }
+  if (yamlContainer && Object.keys(configOptions || {}).length > 0) {
+    if (currentConfig.deploy_mode !== deployMode) {
+      currentConfig.deploy_mode = deployMode;
+      renderConfigEditor();
+    }
+  }
+}
+
+if (serverDeployMode) {
+  updateDeployModeBadge(serverDeployMode, "deploy-mode");
 }
 
 // Fallback Default if file is empty
@@ -198,7 +219,7 @@ function renderConfigEditor() {
         value = deployMode;
         parentObj[key] = deployMode;
       }
-      
+
       const span = document.createElement('span');
       span.className = 'yaml-value-readonly';
       span.textContent = value;
@@ -206,7 +227,7 @@ function renderConfigEditor() {
       span.style.color = "var(--text-secondary)";
       span.style.fontStyle = "italic";
       line.appendChild(span);
-      
+
       yamlContainer.appendChild(line);
       return;
     }
@@ -895,15 +916,16 @@ async function fetchStats() {
   try {
     const res = await fetch("/stats");
     const data = await res.json();
-    
-    // Update deploy mode badge
+
+    // Update deploy mode badge - NOW handled by separate endpoint call in initializeApp
+    // But we keep this as backup or if stats returns it
     if (data.deploy_mode) {
-      updateDeployModeBadge(data.deploy_mode);
+      updateDeployModeBadge(data.deploy_mode, "stats");
     }
-    
+
     // Update hasData state
     hasData = data.has_data === true;
-    
+
     if (data.documents) {
       statsEl.textContent = `${data.documents} documents indexed`;
     } else {
@@ -938,7 +960,7 @@ async function loadProjects() {
     // Check if any projects exist - if not, default to feed mode
     const res = await fetch("/projects");
     const projects = await res.json();
-    
+
     if (projects.length === 0) {
       // No projects - default to feed mode (create new project)
       setMode("feed");
@@ -1013,58 +1035,58 @@ if (configUpload) {
   configUpload.onchange = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    
+
     showLoading();
     try {
       const content = await file.text();
       const parsed = jsyaml.load(content);
-      
+
       if (!parsed || !parsed.name) {
         alert("Invalid config file: missing 'name' field");
         return;
       }
-      
+
       // Normalize project name to match backend convention (nyrag + cleaned name)
       const rawName = parsed.name;
       const cleanName = rawName.replace(/-/g, "").replace(/_/g, "").toLowerCase();
       const normalizedName = `nyrag${cleanName}`;
-      
+
       // Save the uploaded config
       await fetch("/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: content })
       });
-      
+
       // Select the project with normalized name
       activeProjectName = normalizedName;
       currentConfig = deepMerge(JSON.parse(JSON.stringify(FALLBACK_CONFIG)), parsed);
-      
+
       // Update active project indicator
       const indicator = document.getElementById("active-project-indicator");
       if (indicator) {
         indicator.textContent = `Project: ${normalizedName}`;
       }
-      
+
       // Try to select the project on the backend
       await fetch("/projects/select", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ project_name: normalizedName })
       });
-      
+
       // Refresh stats and switch to chat mode
       await fetchStats();
       chatHistory = [];
       setMode("chat");
-      
+
     } catch (e) {
       console.error("Failed to parse config file", e);
       alert("Failed to parse config file: " + e.message);
     } finally {
       hideLoading();
     }
-    
+
     // Reset file input
     event.target.value = "";
   };
@@ -1140,30 +1162,46 @@ async function initializeApp() {
   // Always start in feed mode (create new project)
   // Users must upload a config to chat with an existing project
   activeProjectName = null;
-  
-  // Fetch deploy mode and stats first
+
+  // Fetch deploy mode explicitly
+  try {
+    const res = await fetch("/deploy-mode");
+    if (res.ok) {
+      const data = await res.json();
+      console.log("Deploy mode fetch:", data);
+      if (data.mode) {
+        updateDeployModeBadge(data.mode, "deploy-mode");
+      }
+    } else {
+      console.warn("Deploy mode fetch failed:", res.status);
+    }
+  } catch (e) {
+    console.error("Failed to fetch deploy mode", e);
+  }
+
+  // Fetch stats (which might also have deploy_mode but we prefer the explicit one above)
   try {
     const res = await fetch("/stats");
     const data = await res.json();
     if (data.deploy_mode) {
-      updateDeployModeBadge(data.deploy_mode);
+      updateDeployModeBadge(data.deploy_mode, "stats");
     }
   } catch (e) {
     console.error("Failed to fetch initial stats", e);
   }
-  
+
   // Set indicator to "New Project"
   const indicator = document.getElementById("active-project-indicator");
   if (indicator) {
     indicator.textContent = "New Project";
   }
-  
+
   // Load the default/template config for feed mode
   await loadSchema("web");
   currentConfig = JSON.parse(JSON.stringify(FALLBACK_CONFIG));
   renderConfigEditor();
   await loadExamples();
-  
+
   // Set to feed mode AFTER everything is loaded
   setMode("feed");
 }

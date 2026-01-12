@@ -1,7 +1,7 @@
 import os
-from urllib.parse import urlparse
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
+from urllib.parse import urlparse
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -215,11 +215,11 @@ class DeployConfig(BaseModel):
 
     def get_cloud_secret_token(self) -> Optional[str]:
         """Get Vespa Cloud secret token for data-plane authentication.
-        
+
         Priority:
         1. Environment variable VESPA_CLOUD_SECRET_TOKEN
         2. Vespa CLI config
-        
+
         Returns:
             The secret token if found, None otherwise.
         """
@@ -260,7 +260,7 @@ class Config(BaseModel):
     For cloud mode, you can set cloud_tenant
     in config to avoid env vars (env still wins when set).
     You can also set vespa_url/vespa_port in config; env vars still take precedence.
-    
+
     Hidden fields (vespa_host, vespa_port_resolved, vespa_cloud_token_id) are
     persisted in conf.yml for inference but excluded from the UI editor schema.
     """
@@ -277,7 +277,7 @@ class Config(BaseModel):
     crawl_params: Optional[CrawlParams] = None
     doc_params: Optional[DocParams] = None
     llm_config: Optional[LLMConfig] = None
-    
+
     # Hidden vespa connection fields - persisted for inference, not shown in UI editor
     # These are populated after deployment and used for feeding/querying
     vespa_host: Optional[str] = Field(default=None, exclude=True)

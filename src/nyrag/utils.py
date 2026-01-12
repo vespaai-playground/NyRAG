@@ -25,12 +25,12 @@ def is_cloud_mode(deploy_config: Optional["DeployConfig"] = None) -> bool:
 
 def get_cloud_secret_token(deploy_config: Optional["DeployConfig"] = None) -> Optional[str]:
     """Get Vespa Cloud secret token for data-plane authentication.
-    
+
     Priority:
     1. Environment variable VESPA_CLOUD_SECRET_TOKEN
     2. DeployConfig settings
     3. Vespa CLI config
-    
+
     Returns:
         The secret token if found, None otherwise.
     """
@@ -38,15 +38,16 @@ def get_cloud_secret_token(deploy_config: Optional["DeployConfig"] = None) -> Op
     token = os.getenv("VESPA_CLOUD_SECRET_TOKEN")
     if token:
         return token
-    
+
     # Check deploy config
     if deploy_config:
         token = deploy_config.get_cloud_secret_token()
         if token:
             return token
-    
+
     # Fallback to CLI config
     from nyrag.vespa_cli import get_vespa_cloud_secret_token
+
     return get_vespa_cloud_secret_token()
 
 

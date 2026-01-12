@@ -8,6 +8,8 @@ from typing import Literal
 
 
 # Deploy mode: "local" (Docker) or "cloud" (Vespa Cloud)
+# This is a static default. The actual runtime default might be "cloud"
+# if running with --cloud flag (NYRAG_CLOUD_MODE=1)
 DEFAULT_DEPLOY_MODE: Literal["local", "cloud"] = "local"
 
 # Vespa connection defaults

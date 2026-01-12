@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 @dataclass
 class DeployResult:
     """Result from a Vespa deployment with endpoint information."""
+
     success: bool
     vespa_url: Optional[str] = None
     vespa_port: Optional[int] = None
@@ -88,7 +89,11 @@ def _deploy_with_pyvespa(deployer: Any, *, application_package: ApplicationPacka
     - deploy(application_package=...)
     - deploy(application_root=...)
     - deploy() after providing application_package/application_root on the deployer
+
+    For VespaCloud, we also pass disk_folder to prevent pyvespa from creating
+    a folder with the application name in the current working directory.
     """
+    import inspect
 
     def _should_fallback(exc: Exception) -> bool:
         msg = str(exc)
@@ -96,14 +101,28 @@ def _deploy_with_pyvespa(deployer: Any, *, application_package: ApplicationPacka
             return True
         return _MISSING_PACKAGE_ERROR in msg
 
+    def _get_deploy_kwargs() -> dict:
+        """Build kwargs for deploy() based on signature, including disk_folder for VespaCloud."""
+        deploy_kwargs: dict = {}
+        try:
+            deploy_sig = inspect.signature(deployer.deploy)
+            # Pass disk_folder to prevent VespaCloud from creating a folder in cwd
+            if "disk_folder" in deploy_sig.parameters:
+                deploy_kwargs["disk_folder"] = str(application_root)
+        except Exception:
+            pass
+        return deploy_kwargs
+
+    deploy_kwargs = _get_deploy_kwargs()
+
     try:
-        return deployer.deploy(application_package=application_package)
+        return deployer.deploy(application_package=application_package, **deploy_kwargs)
     except Exception as e:
         if not _should_fallback(e):
             raise
 
     try:
-        return deployer.deploy(application_root=str(application_root))
+        return deployer.deploy(application_root=str(application_root), **deploy_kwargs)
     except Exception as e:
         if not _should_fallback(e):
             raise
@@ -120,7 +139,7 @@ def _deploy_with_pyvespa(deployer: Any, *, application_package: ApplicationPacka
                 setattr(deployer, attr, value)
             except Exception:
                 pass
-    return deployer.deploy()
+    return deployer.deploy(**deploy_kwargs)
 
 
 def _set_vespa_endpoint_env_from_app(vespa_app: Any) -> None:
@@ -190,7 +209,7 @@ def deploy_app_package(
     Connection settings come from environment variables:
     - VESPA_URL, VESPA_PORT, VESPA_CONFIGSERVER_URL (for local)
     - VESPA_CLOUD_* env vars (for cloud)
-    
+
     Returns:
         DeployResult with endpoint information for persistence.
     """
@@ -249,7 +268,7 @@ def deploy_app_package(
                 )
                 _set_vespa_endpoint_env_from_app(vespa_app)
                 logger.success("VespaDocker deploy succeeded")
-                
+
                 # Extract endpoint info for result
                 url = getattr(vespa_app, "url", None)
                 port = getattr(vespa_app, "port", 8080)
@@ -316,46 +335,47 @@ def deploy_app_package(
                     application_package=app_package,
                     application_root=effective_app_dir,
                 )
-                
+
                 # Get endpoints directly from VespaCloud object (more reliable than parsing logs)
                 mtls_endpoint = None
                 token_endpoint = None
                 try:
-                    if hasattr(cloud, 'get_mtls_endpoint'):
+                    if hasattr(cloud, "get_mtls_endpoint"):
                         mtls_endpoint = cloud.get_mtls_endpoint()
                         if mtls_endpoint:
                             logger.info(f"mTLS endpoint: {mtls_endpoint}")
                 except Exception as e:
                     logger.debug(f"Could not get mTLS endpoint: {e}")
-                
+
                 try:
-                    if hasattr(cloud, 'get_token_endpoint'):
+                    if hasattr(cloud, "get_token_endpoint"):
                         token_endpoint = cloud.get_token_endpoint(instance=instance)
                         if token_endpoint:
                             logger.info(f"Token endpoint: {token_endpoint}")
                 except Exception as e:
                     logger.debug(f"Could not get token endpoint: {e}")
-                
+
                 # Determine the best endpoint URL
                 endpoint_url = mtls_endpoint or token_endpoint
-                
+
                 # Set environment variables from endpoints
                 import os
+
                 if endpoint_url and not os.getenv("VESPA_URL"):
                     os.environ["VESPA_URL"] = endpoint_url.rstrip("/")
                     os.environ["VESPA_PORT"] = "443"
-                
+
                 # Also extract from vespa_app as fallback
                 _set_vespa_endpoint_env_from_app(vespa_app)
-                
+
                 # Get cert/key paths from vespa_app
                 cert_path = None
                 key_path = None
-                if hasattr(vespa_app, 'cert'):
-                    cert_path = getattr(vespa_app, 'cert', None)
-                if hasattr(vespa_app, 'key'):
-                    key_path = getattr(vespa_app, 'key', None)
-                
+                if hasattr(vespa_app, "cert"):
+                    cert_path = getattr(vespa_app, "cert", None)
+                if hasattr(vespa_app, "key"):
+                    key_path = getattr(vespa_app, "key", None)
+
                 logger.success("Vespa Cloud deploy succeeded")
                 return DeployResult(
                     success=True,

@@ -201,8 +201,7 @@ class TestVespaCliFallback:
             assert deploy_config.get_cloud_application() == config.get_app_package_name()
             assert deploy_config.get_cloud_instance() == "default"
             assert (
-                config.get_vespa_url()
-                == f"https://{config.get_app_package_name()}.tenant.default.z.vespa-app.cloud"
+                config.get_vespa_url() == f"https://{config.get_app_package_name()}.tenant.default.z.vespa-app.cloud"
             )
             assert config.get_vespa_port() == DEFAULT_VESPA_CLOUD_PORT
 
