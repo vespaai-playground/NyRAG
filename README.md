@@ -84,8 +84,6 @@ crawl_params:
   respect_robots_txt: true
 rag_params:
   embedding_model: sentence-transformers/all-MiniLM-L6-v2
-  llm_api_key: your-api-key
-  llm_model: openai/gpt-4o
 ```
 
 **Example Docs Processing Config:**
@@ -98,8 +96,6 @@ doc_params:
   recursive: true
 rag_params:
   embedding_model: sentence-transformers/all-mpnet-base-v2
-  llm_api_key: your-api-key
-  llm_model: openai/gpt-4o
 ```
 
 ### 3. Chat
@@ -170,14 +166,14 @@ NyRAG works with any OpenAI-compatible API. Just configure the `rag_params` in y
 | **Ollama** | `http://localhost:11434/v1` | `llama3.2` | `dummy` |
 | **LM Studio** | `http://localhost:1234/v1` | `local-model` | `dummy` |
 | **vLLM** | `http://localhost:8000/v1` | `meta-llama/Llama-3.2-3B-Instruct` | `dummy` |
-| **OpenRouter** | `https://openrouter.ai/api/v1` | `anthropic/claude-3.5-sonnet` | `your-key` |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | `openai/gpt-5.2` | `your-key` |
 | **OpenAI** | `None` (default) | `openai/gpt-4o` | `your-key` |
 
 **Example Config:**
 
 ```yaml
-rag_params:
-  llm_base_url: http://localhost:11434/v1  # Optional: remove for OpenAI
+llm_config:
+  llm_base_url: https://openrouter.ai/api/v1
   llm_model: llama3.2
   llm_api_key: dummy
 ```
