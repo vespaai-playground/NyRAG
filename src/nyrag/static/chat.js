@@ -811,31 +811,31 @@ async function sendMessage() {
               }
             } else if (event === "thinking") {
               // Only show thinking during answer phase (not query generation)
-              if (!isAnswerPhase) continue;
+              if (isAnswerPhase) {
+                if (!thinkingEl) {
+                  thinkingEl = document.createElement("div");
+                  thinkingEl.className = "thinking-section";
 
-              if (!thinkingEl) {
-                thinkingEl = document.createElement("div");
-                thinkingEl.className = "thinking-section";
-
-                const header = document.createElement("div");
-                header.className = "thinking-header";
-                header.innerHTML = `
+                  const header = document.createElement("div");
+                  header.className = "thinking-header";
+                  header.innerHTML = `
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                   Thinking Process
                 `;
-                header.onclick = () => {
-                  thinkingBody.classList.toggle("collapsed");
-                };
+                  header.onclick = () => {
+                    thinkingBody.classList.toggle("collapsed");
+                  };
 
-                thinkingBody = document.createElement("div");
-                thinkingBody.className = "thinking-content";
+                  thinkingBody = document.createElement("div");
+                  thinkingBody.className = "thinking-content";
 
-                thinkingEl.appendChild(header);
-                thinkingEl.appendChild(thinkingBody);
-                bubble.insertBefore(thinkingEl, textEl);
+                  thinkingEl.appendChild(header);
+                  thinkingEl.appendChild(thinkingBody);
+                  bubble.insertBefore(thinkingEl, textEl);
+                }
+                thinkingContent += data;
+                thinkingBody.textContent = thinkingContent;
               }
-              thinkingContent += data;
-              thinkingBody.textContent = thinkingContent;
             } else if (event === "queries") {
               const details = document.createElement("details");
               details.className = "meta-details";
