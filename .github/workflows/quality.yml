@@ -27,16 +27,16 @@ jobs:
 
     - name: Install quality tools
       run: |
-        uv pip install black isort flake8
+        uv pip install .[dev]
 
     - name: Check code formatting with black
       run: |
-        uv run black --check --line-length 119 --target-version py310 --exclude='/(venv|.venv|env|.env)/' .
+        uv run black --check .
 
     - name: Check import sorting with isort
       run: |
-        uv run isort --check-only --skip venv --skip .venv --skip env --skip .env .
+        uv run isort --check-only .
 
     - name: Lint with flake8
       run: |
-        uv run flake8 --max-line-length 119 --exclude=venv,.venv,env,.env --ignore=E203,W503 .
+        uv run flake8 --max-line-length 119 --ignore=E203,W503 --exclude=.venv,venv,.env,env,build,dist .

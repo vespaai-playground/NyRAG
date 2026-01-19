@@ -55,6 +55,21 @@ Issues = "https://github.com/abhishekkrthakur/nyrag/issues"
 [tool.setuptools.package-data]
 nyrag = ["static/*", "templates/*", "examples/*"]
 
+[tool.black]
+line-length = 119
+target-version = ["py310"]
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | \.env
+  | env
+  | build
+  | dist
+)/
+'''
+
 [tool.isort]
 ensure_newline_before_comments = true
 force_grid_wrap = 0
