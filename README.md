@@ -20,6 +20,7 @@ This multi-query RAG approach with chunk-level retrieval ensures answers are com
 
 NyRAG works with **any OpenAI-compatible API**, including:
 - **OpenRouter** (100+ models from various providers)
+- **Requesty** (OpenAI-compatible gateway, 400+ models)
 - **Ollama** (local models: Llama, Mistral, Qwen, etc.)
 - **LM Studio** (local GUI for running models)
 - **vLLM** (high-performance local or remote inference)
@@ -167,6 +168,7 @@ NyRAG works with any OpenAI-compatible API. Just configure the `rag_params` in y
 | **LM Studio** | `http://localhost:1234/v1` | `local-model` | `dummy` |
 | **vLLM** | `http://localhost:8000/v1` | `meta-llama/Llama-3.2-3B-Instruct` | `dummy` |
 | **OpenRouter** | `https://openrouter.ai/api/v1` | `openai/gpt-5.2` | `your-key` |
+| **Requesty** | `https://router.requesty.ai/v1` | `openai/gpt-4o-mini` | `your-key` |
 | **OpenAI** | `None` (default) | `openai/gpt-4o` | `your-key` |
 
 **Example Config:**
