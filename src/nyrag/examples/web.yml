@@ -35,6 +35,8 @@ llm_config:
   base_url: https://openrouter.ai/api/v1
   model: anthropic/claude-3.5-sonnet
   api_key: your-openrouter-key
+
+  # For Requesty: base_url: https://router.requesty.ai/v1
   
   # For Ollama (local):
   # base_url: http://localhost:11434/v1
